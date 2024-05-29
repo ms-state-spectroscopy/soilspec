@@ -1,6 +1,14 @@
 # Soil spectroscopy toolbox
 
-# Input data
+## General instructions
+
+1. Load the data. This is any set of numerical features (X) and labels (Y), structured as pandas DataFrames and divided into a training and test set.
+2. Instantiate an Analyzer, or a subclass of one.
+3. Train the Analyzer on the training data.
+4. Evaluate the Analyzer using the test set.
+
+
+## Input data
 
 A dataset should be a pandas DataFrame with:
 
