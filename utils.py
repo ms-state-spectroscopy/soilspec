@@ -162,3 +162,38 @@ def describeAccuracies(
     axs[0, 2].set_title("True versus predicted values", fontsize=title_size)
 
     plt.show()
+
+
+def plotSpectraFromSet(df: pd.DataFrame, n=1):
+    """
+    Plot spectra from a dataframe.
+    NOTE: We assume that a column contains spectral data IFF the column name is a float,
+    and that this column name is a wavelength in nm.
+
+    Args:
+        df (pd.DataFrame): The dataframe containing spectral values.
+        n (int, optional): Number of spectra to plot. Defaults to 1.
+    """
+
+    rng = np.random.default_rng()
+
+    # choose n spectra at random
+    indices = rng.integers(0, df.shape[0], n)
+
+    spectra_column_names = []
+
+    for col_name in list(df):
+        try:
+            float(col_name)
+        except ValueError:
+            continue
+        spectra_column_names.append(col_name)
+
+    # NOTE: We assume that a column contains spectral data IFF the column name is a float,
+    # and that this column name is a wavelength in nm.
+    spectra = df.loc[:, spectra_column_names]
+    X = np.array(spectra_column_names).astype(float)
+
+    plt.plot(X, spectra.iloc[indices].T)
+    plt.ylim([0, 100])
+    plt.show()
