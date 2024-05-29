@@ -17,9 +17,9 @@ This repository contains a number of spectroscopy calibration models that inheri
 
 ### Planned models
 
-- [ ] Multi-layer perceptron (MLP)
-- [ ] Random Forest (RF)
-- [ ] Partial Least Squares Regressor (PLSR)
+- [x] Multi-layer perceptron (MLP)
+- [x] Random Forest (RF)
+- [x] Partial Least Squares Regressor (PLSR)
 - [ ] Transformer-based
 - [ ] Hybrid LSTM and CNN model (see [Wang et al](https://www.sciencedirect.com/science/article/pii/S016816992300738X?entityID=https%3A%2F%2Flogin.cmu.edu%2Fidp%2Fshibboleth&pes=vor))
 
