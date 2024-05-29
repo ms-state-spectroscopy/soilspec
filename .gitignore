@@ -1,0 +1,10 @@
+__pycache__/
+env/
+wandb/
+*.pyc
+my_dir/
+keras-tuner/
+*.csv
+*.h5
+*.pkl
+*.keras
