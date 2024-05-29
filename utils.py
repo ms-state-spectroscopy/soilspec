@@ -37,31 +37,49 @@ def describeAccuracy(Y_true: pd.DataFrame, Y_pred: pd.DataFrame):
     print(pred_vs_true_df.isna().sum())
     print(pred_vs_true_df)
 
-    g = sns.scatterplot(
-        pred_vs_true_df,
-        x="c_tot_ncs",
-        y="c_tot_ncs_pred",
-        ax=axs[2],
-    )
-    g = sns.scatterplot(
-        pred_vs_true_df,
-        x="n_tot_ncs",
-        y="n_tot_ncs_pred",
-        ax=axs[2],
-    )
-    g = sns.scatterplot(
-        pred_vs_true_df,
-        x="s_tot_ncs",
-        y="s_tot_ncs_pred",
-        ax=axs[2],
-    )
+    for label_name in list(Y_true):
+        g = sns.scatterplot(
+            pred_vs_true_df,
+            x=label_name,
+            y=label_name + "_pred",
+            ax=axs[2],
+        )
+    # g = sns.scatterplot(
+    #     pred_vs_true_df,
+    #     x="c_tot_ncs",
+    #     y="c_tot_ncs_pred",
+    #     ax=axs[2],
+    # )
+    # g = sns.scatterplot(
+    #     pred_vs_true_df,
+    #     x="n_tot_ncs",
+    #     y="n_tot_ncs_pred",
+    #     ax=axs[2],
+    # )
+    # g = sns.scatterplot(
+    #     pred_vs_true_df,
+    #     x="s_tot_ncs",
+    #     y="s_tot_ncs_pred",
+    #     ax=axs[2],
+    # )
     x0, x1 = g.get_xlim()
     y0, y1 = g.get_ylim()
     lims = [max(x0, y0), min(x1, y1)]
     g.plot(lims, lims, "-r")
-    plt.legend(["Carbon", "Nitrogen", "Sulphur"])
+    plt.legend(list(Y_true))
 
     plt.show()
+
+    # Calculate R2
+
+    feature_names = list(Y_true)
+    for i in range(0, Y_true.shape[1]):
+        metric = keras.metrics.R2Score()
+        metric.update_state(
+            Y_true.values[:, i].reshape((-1, 1)), Y_pred.values[:, i].reshape((-1, 1))
+        )
+        result = metric.result()
+        print(f"R2 for {feature_names[i]}: {result}")
 
 
 def describeAccuracies(
@@ -161,6 +179,17 @@ def describeAccuracies(
     axs[0, 1].set_title("Absolute errors, no outliers", fontsize=title_size)
     axs[0, 2].set_title("True versus predicted values", fontsize=title_size)
 
+    plt.show()
+
+
+def plotLoss(history):
+    plt.plot(history.history["loss"], label="loss")
+    plt.plot(history.history["val_loss"], label="val_loss")
+    # plt.ylim([0, 3])
+    plt.xlabel("Epoch")
+    plt.ylabel("Error")
+    plt.legend()
+    plt.grid(True)
     plt.show()
 
 

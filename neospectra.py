@@ -4,14 +4,27 @@ SPECTRUM_START_COLUMN = 55
 
 
 def load(
-    include_ec=True, train_split=0.75, normalize_Y=False
+    labels: list[str],
+    include_ec=True,
+    include_depth=True,
+    train_split=0.75,
+    normalize_Y=False,
 ) -> tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]:
+    """Load the averaged NIR samples from the Neospectra dataset
+
+    Args:
+        labels (list[str]): The labels that we wish to include in Y_train and Y_test
+        include_ec (bool, optional): Include soil electroconductivity as a feature. Defaults to True.
+        train_split (float, optional): Split between training and test set. Defaults to 0.75.
+        normalize_Y (bool, optional): Whether to normalize the labels. Defaults to False.
+
+    Returns:
+        tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]: _description_
+    """
     dataset = pd.read_csv("neospectra_db/Neospectra_WoodwellKSSL_avg_soil+site+NIR.csv")
 
     # Drop NaNs for labels
-    dataset = dataset.dropna(
-        axis="index", subset=["c_tot_ncs", "n_tot_ncs", "s_tot_ncs"]
-    )
+    dataset = dataset.dropna(axis="index", subset=labels)
 
     if include_ec:
         dataset = dataset.dropna(axis="index", subset=["ec_12pre"])
@@ -30,15 +43,22 @@ def load(
     test_spectrum = test_dataset.copy().iloc[:, SPECTRUM_START_COLUMN:]
 
     if include_ec:
-        X_train = train_spectrum.join(train_conductivity)
-        X_test = test_spectrum.join(test_conductivity)
+        X_train = train_spectrum.join(train_dataset["ec_12pre"])
+        X_test = test_spectrum.join(test_dataset["ec_12pre"])
     else:
         X_train = train_spectrum
         X_test = test_spectrum
-        
 
-    Y_train = train_dataset.copy()[["c_tot_ncs", "n_tot_ncs", "s_tot_ncs"]]
-    Y_test = test_dataset.copy()[["c_tot_ncs", "n_tot_ncs", "s_tot_ncs"]]
+    if include_depth:
+        X_train = X_train.join(
+            train_dataset.loc[:, ["lay.depth.to.bottom", "lay.depth.to.top"]]
+        )
+        X_test = X_test.join(
+            test_dataset.loc[:, ["lay.depth.to.bottom", "lay.depth.to.top"]]
+        )
+
+    Y_train = train_dataset.loc[:, labels]
+    Y_test = test_dataset.loc[:, labels]
 
     # Save for unnormalization later
     original_test_label_std = Y_test.std()
