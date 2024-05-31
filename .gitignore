@@ -4,7 +4,7 @@ wandb/
 *.pyc
 my_dir/
 keras-tuner/
-*.csv
+kaggle-comp/*/*.csv
 *.h5
 *.pkl
 *.keras
