@@ -11,8 +11,6 @@ Steps:
 """
 
 import pandas as pd
-import mississippi_db
-import mississippi_db.loader
 import neospectra
 import utils
 from analyzers.mlp import MlpAnalyzer
@@ -21,14 +19,20 @@ if __name__ == "__main__":
 
     # 1. Load the data. This is any set of numerical features (X) and labels (Y),
     # structured as pandas DataFrames and divided into a training and test set.
-    (X_train, Y_train), (X_test, Y_test) = mississippi_db.loader.load(
+    (X_train, Y_train), (X_test, Y_test) = neospectra.load(
         include_ec=True,
         labels=[
-            "CH_Ksat", "FH_Ksat"
+            "eoc_tot_c",
+            "c_tot_ncs",
+            "n_tot_ncs",
+            "s_tot_ncs",
+            "ph_h2o",
+            "db_13b",
+            "clay_tot_psa",
+            "silt_tot_psa",
+            "sand_tot_psa",
         ],
     )
-
-    
 
     print(Y_train)
 
