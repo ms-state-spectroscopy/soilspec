@@ -8,3 +8,5 @@ kaggle-comp/*/*.csv
 *.h5
 *.pkl
 *.keras
+neospectra_db/*.csv
+neospectra_db/*.zip

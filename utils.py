@@ -19,12 +19,12 @@ def describeAccuracy(Y_true: pd.DataFrame, Y_pred: pd.DataFrame):
     fig.set_size_inches(14.0, 4.0)
     axs: list[Axes]
 
-    sns.histplot(data=errors, x="c_tot_ncs", bins=25, ax=axs[0])
+    sns.histplot(data=errors, x=list(Y_true)[0], bins=25, ax=axs[0])
     axs[0].set_title("Absolute errors")
 
     errors_no_outliers = errors[(np.abs(zscore(errors)) < 3).all(axis=1)]
 
-    sns.histplot(data=errors_no_outliers, x="c_tot_ncs", bins=25, ax=axs[1])
+    sns.histplot(data=errors_no_outliers, x=list(Y_true)[0], bins=25, ax=axs[1])
     axs[1].set_title("Absolute errors, no outliers")
 
     print(Y_true.tail())

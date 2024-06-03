@@ -13,7 +13,6 @@ class MlpAnalyzer(Analyzer):
         verbose: int = 0,
         lr=1e-3,
         hidden_size=320,
-        batch_size=32,
         activation="relu",
         n_logits=3,
     ) -> None:
@@ -22,7 +21,6 @@ class MlpAnalyzer(Analyzer):
         self.activation = activation
         self.lr = lr
         self.hidden_size = hidden_size
-        self.batch_size = batch_size
 
         self.normalizer = tf.keras.layers.Normalization(axis=-1)
 
@@ -60,12 +58,13 @@ class MlpAnalyzer(Analyzer):
         epochs=500,
         val_split=0.2,
         early_stop_patience=50,
+        batch_size=32
     ):
         self.normalizer.adapt(np.array(X))
         return self.model.fit(
             X,
             Y,
-            batch_size=self.batch_size,
+            batch_size=batch_size,
             epochs=epochs,
             validation_split=val_split,
             callbacks=[
