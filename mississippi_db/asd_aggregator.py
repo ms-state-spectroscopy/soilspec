@@ -45,6 +45,7 @@ for path_str in tqdm(glob.glob(dataset_root + "/**/*.asd", recursive=True)):
     treatment = treatment.replace("nature3", "nature_3")
     treatment = treatment.replace("native5", "native_5")
     treatment = treatment.replace("natie5", "native_5")
+    treatment = treatment.replace("row", "r")
 
     rows.append(
         [relative_path, treatment, repitition, depth_to_top, depth_to_bottom[:-2]]
