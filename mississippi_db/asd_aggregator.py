@@ -121,6 +121,8 @@ df.loc[:, ["file", "lay.depth.to.top", "lay.depth.to.bottom", "trial"]].to_csv(
 )
 
 # DROP ALL SAMPLES WITHOUT EXACTLY THREE SCANS
+
+
 len_before = len(df)
 sample_id_counts = df["sample_id"].value_counts()
 sample_ids_without_three_reps = sample_id_counts[sample_id_counts != 3].index
@@ -132,6 +134,8 @@ len_after = len(df)
 print(
     f"Dropped {len_before-len_after} samples ({100-(len_after/len_before)*100:.2f}%) for not having three trials"
 )
+df.set_index("path", inplace=True)
+df.index.rename("sample_id", inplace=True)
 
 print(df)
 print(df.describe())
