@@ -51,6 +51,9 @@ def parseFileName(file_name: str) -> tuple[str, int, int, int]:
 
     sample_id = remaining
 
+    if depth_to_top > depth_to_bottom or depth_to_top > 100 or depth_to_bottom > 100:
+        raise Exception(f"{file_name}: Could not get depth data from '{file_name}'")
+
     return sample_id, trial, depth_to_top, depth_to_bottom
 
 
@@ -131,6 +134,7 @@ print(
 )
 
 print(df)
+print(df.describe())
 print("Writing to CSV...")
 df.to_csv("ms_database.csv")
 
