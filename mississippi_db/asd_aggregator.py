@@ -141,5 +141,6 @@ print(df)
 print(df.describe())
 print("Writing to CSV...")
 df.to_csv("ms_database.csv")
+df.index.to_series().to_csv("sample_ids.csv")
 
 print(f"Error rate: {num_errors/total_files}")
