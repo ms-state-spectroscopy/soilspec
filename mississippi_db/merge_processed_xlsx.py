@@ -32,13 +32,7 @@ for path_str in tqdm(glob.glob(dataset_root + "/**/*.xlsx", recursive=True)):
     try:
         xlsx_df = pd.read_excel(path_str)
 
-        xlsx_df = (
-            xlsx_df.replace(human_to_permanent_treatments)
-            .set_index(["treatment", "lay.depth.to.top", "lay.depth.to.bottom"])
-            .sort_index()
-        )
-
-        print(xlsx_df)
+        xlsx_df = xlsx_df.replace(human_to_permanent_treatments)
 
         frames.append(xlsx_df)
 
@@ -48,17 +42,58 @@ for path_str in tqdm(glob.glob(dataset_root + "/**/*.xlsx", recursive=True)):
         num_errors += 1
         continue
 
-df = pd.concat(frames).sort_index().reset_index()
+asd_csv = pd.read_csv("ms_database.csv")
+# frames.append(asd_csv)
+
+df = pd.concat(frames)
 df = df.replace("", np.nan)
 cols = df.columns.tolist()
-df = (
-    df.groupby(
-        ["treatment", "lay.depth.to.top", "lay.depth.to.bottom"], as_index=False
-    )[cols]
-    .first()
-    .set_index(["treatment", "lay.depth.to.top", "lay.depth.to.bottom"])
+df = df.groupby(
+    ["treatment", "lay.depth.to.top", "lay.depth.to.bottom"], as_index=False
+)[cols].first()
+
+df["sample_id"] = (
+    df["treatment"].astype(str)
+    + "_"
+    + df["lay.depth.to.top"].astype(int).astype(str)
+    + "-"
+    + df["lay.depth.to.bottom"].astype(int).astype(str)
+    + "cm"
 )
 
-print(df)
+asd_csv["sample_id"] = (
+    asd_csv["treatment"].astype(str)
+    + "_"
+    + asd_csv["lay.depth.to.top"].astype(int).astype(str)
+    + "-"
+    + asd_csv["lay.depth.to.bottom"].astype(int).astype(str)
+    + "cm"
+)
 
-df.to_csv("merged_xslx.csv")
+df.set_index("sample_id", inplace=True)
+asd_csv.set_index("sample_id", inplace=True)
+
+print(df)
+print(asd_csv)
+
+df3 = (
+    pd.merge(
+        asd_csv,
+        df,
+        how="left",
+        left_index=True,
+        right_index=True,
+        suffixes=("", "_y"),
+    )
+    .reset_index()
+    .drop_duplicates(subset=["sample_id", "trial"])
+    .set_index("sample_id")
+)
+
+df3.drop(df3.filter(regex="_y$").columns, axis=1, inplace=True)
+df3.drop(df3.filter(regex="_x$").columns, axis=1, inplace=True)
+
+print(asd_csv)
+print(df)
+print(df3)
+df3.to_csv("merged_xlsx.csv")

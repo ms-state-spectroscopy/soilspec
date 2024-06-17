@@ -66,17 +66,17 @@ for path_str in tqdm(glob.glob(dataset_root + "/**/*.asd", recursive=True)):
     try:
         file_name = path_str.split("/")[-1].split(".")[-2]
         treatment, trial, depth_to_top, depth_to_bottom = parseFileName(file_name)
+
+        treatment = treatment.replace("_", "-")
+        treatment = treatment.replace("row", "r")
+        treatment = treatment.lower()
+
         # sample_id, depth, trial = file_name.rsplit("_", 2)
     except Exception as e:
         if show_warnings:
             print(f"{e}")
         num_errors += 1
         continue
-
-    treatment = treatment.replace("nature3", "nature_3")
-    treatment = treatment.replace("native5", "native_5")
-    treatment = treatment.replace("natie5", "native_5")
-    treatment = treatment.replace("row", "r")
 
     sample_id = path_str[:-6]
 
@@ -134,8 +134,15 @@ len_after = len(df)
 print(
     f"Dropped {len_before-len_after} samples ({100-(len_after/len_before)*100:.2f}%) for not having three trials"
 )
-df.set_index("path", inplace=True)
-df.index.rename("sample_id", inplace=True)
+df.set_index(["treatment", "lay.depth.to.top", "lay.depth.to.bottom"], inplace=True)
+# df.index.rename("sample_id", inplace=True)
+
+# DROP ALL DUPLICATE SCANS
+df = (
+    df.reset_index()
+    .groupby(["treatment", "lay.depth.to.top", "lay.depth.to.bottom", "trial"])
+    .first()
+).sort_index()
 
 print(df)
 print(df.describe())

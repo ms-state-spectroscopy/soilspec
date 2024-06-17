@@ -27,12 +27,13 @@ for path_str in tqdm(glob.glob(dataset_root + "/**/*.xlsx", recursive=True)):
     try:
         df = pd.read_excel(path_str).set_index("treatment")
 
-        treatment_names = df.index.to_list()
+        treatment_names = df.index.astype(str).to_list()
 
         for name in treatment_names:
             human_name = name
+            print(name)
             name: str
-            name = name.lower().strip()
+            name = name.strip()
             name = name.replace(" row", "-r")
             name = name.replace(" ", "-")
             name = name.replace(" #", "-")
@@ -41,7 +42,7 @@ for path_str in tqdm(glob.glob(dataset_root + "/**/*.xlsx", recursive=True)):
             name = name.replace("gh-", "gh")
             name = name.replace("field-", "field")
             name = name.replace("native-", "native")
-            # print(name)
+            name = name.lower()
 
             human_to_permanent_treatments[human_name] = name
 
