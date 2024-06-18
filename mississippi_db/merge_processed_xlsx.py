@@ -23,9 +23,7 @@ print(human_to_permanent_treatments)
 
 frames = []
 
-for path_str in tqdm(
-    glob.glob(dataset_root + "/**/sand_clay_silt.xlsx", recursive=True)
-):
+for path_str in tqdm(glob.glob(dataset_root + "/**/**.xlsx", recursive=True)):
     total_files += 1
 
     # print(path_str)
@@ -45,9 +43,10 @@ for path_str in tqdm(
             + "cm"
         )
 
-        xlsx_df.set_index("sample_id").sort_index().to_excel(
-            path_str.rsplit(".")[-2] + "_permanent_ids.xlsx"
-        )
+        if not "permanent" in path_str:
+            xlsx_df.set_index("sample_id").sort_index().to_excel(
+                path_str.rsplit(".")[-2] + "_permanent_ids.xlsx"
+            )
 
         frames.append(xlsx_df)
 
@@ -77,42 +76,51 @@ df = df.groupby(
 #     + "cm"
 # )
 
-df.set_index("sample_id", inplace=True)
-asd_csv.set_index("sample_id", inplace=True)
 
 print(df)
 print(asd_csv)
 
+df.set_index("sample_id", inplace=True)
+asd_csv.set_index("sample_id", inplace=True)
 merged_df = (
     pd.merge(
         asd_csv,
         df,
-        how="left",
+        how="outer",
         left_index=True,
         right_index=True,
+        suffixes=("_x", None),
     )
     .reset_index()
     .drop_duplicates(subset=["sample_id", "trial"])
     .set_index("sample_id")
 )
 
+# merged_df = (
+#     pd.concat([asd_csv, df], join="outer", ignore_index=True)
+#     .groupby("sample_id")
+#     .first()
+# )
+
 # merged_df = df
 
 # df3.drop(df3.filter(regex="_y$").columns, axis=1, inplace=True)
 # merged_df.drop(merged_df.filter(regex="_x$").columns, axis=1, inplace=True)
 
-# df3 = df3.dropna(axis=0, subset=["clay_tot_psa"])
+merged_df = merged_df.dropna(axis=0, subset=["clay_tot_psa"])
+
+print(merged_df.groupby("group").count())
 
 # merged_df = merged_df[merged_df["source_sheet"] == "Tucker-physical indicators"]
 
-print(asd_csv)
-print(df)
-print(merged_df)
+# print(asd_csv)
+# print(df)
+# print(merged_df)
 
 nan_rate = merged_df.isna().sum() / 31.200
 nan_rate.to_clipboard()
 
-merged_df.to_csv("merged_xlsx.csv")
+merged_df.to_csv("mississippi_db.csv")
 merged_df.to_excel("merged.xlsx")
 
 merged_df.head(30).to_clipboard()

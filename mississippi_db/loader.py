@@ -21,8 +21,9 @@ def load(
     Returns:
         tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]: _description_
     """
-    dataset = pd.read_csv("mississippi_db/jRead_spec_lab.csv").set_index("file_name")
-
+    dataset = pd.read_csv("mississippi_db/mississippi_db.csv").set_index(
+        ["sample_id", "trial"]
+    )
 
     # Drop NaNs for labels
     dataset = dataset.dropna(axis="index", subset=labels)
@@ -52,8 +53,18 @@ def load(
         # Clean up depth column
         depths = dataset["Sample_Depth"]
 
-        start_depth = dataset["Sample_Depth"].map(lambda x: x.split('-')[0]).astype(float).rename("lay.depth.to.top")
-        end_depth = dataset["Sample_Depth"].map(lambda x: x.split('-')[1]).astype(float).rename("lay.depth.to.bottom")
+        start_depth = (
+            dataset["Sample_Depth"]
+            .map(lambda x: x.split("-")[0])
+            .astype(float)
+            .rename("lay.depth.to.top")
+        )
+        end_depth = (
+            dataset["Sample_Depth"]
+            .map(lambda x: x.split("-")[1])
+            .astype(float)
+            .rename("lay.depth.to.bottom")
+        )
 
         dataset = dataset.join(start_depth)
         dataset = dataset.join(end_depth)
@@ -74,5 +85,5 @@ def load(
         Y_test = (Y_test - Y_test.mean()) / Y_test.std()
 
     print(X_train.dtypes)
-    
+
     return (X_train, Y_train), (X_test, Y_test)

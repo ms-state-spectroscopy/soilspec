@@ -35,7 +35,7 @@ if __name__ == "__main__":
     (X_train, Y_train), (X_test, Y_test) = mississippi_db.loader.load(
         include_ec=True,
         labels=[
-            "CH_Ksat", "FH_Ksat"
+            "sand_tot_psa", "clay_tot_psa", "silt_tot_psa"
         ],
     )
 

@@ -69,6 +69,13 @@ for path_str in tqdm(glob.glob(dataset_root + "/**/*.asd", recursive=True)):
 
         treatment = treatment.replace("_", "-")
         treatment = treatment.replace("row", "r")
+        treatment = treatment.replace("gh-", "gh")
+        treatment = treatment.replace("field-", "field")
+        treatment = treatment.replace("native-", "native")
+        treatment = treatment.replace("nature-", "nature")
+        treatment = treatment.replace("ht-", "ht")
+        treatment = treatment.replace("row", "r")
+        treatment = treatment.replace("r-", "r")
         treatment = treatment.lower()
 
         data, meta = specdal.read(path_str)
@@ -95,7 +102,7 @@ for path_str in tqdm(glob.glob(dataset_root + "/**/*.asd", recursive=True)):
             depth_to_top,
             depth_to_bottom,
         ]
-        # + reflectance.to_list()
+        + reflectance.to_list()
     )
 
 # A special loop for the Biochar data
@@ -104,7 +111,7 @@ for path_str in tqdm(
 ):
     total_files += 1
 
-    print(path_str)
+    # print(path_str)
 
     relative_path = path_str.split("/", 4)[-1]
     try:
@@ -141,7 +148,7 @@ for path_str in tqdm(
             depth_to_top,
             depth_to_bottom,
         ]
-        # + reflectance.to_list()
+        + reflectance.to_list()
     )
 
 df = pd.DataFrame(
@@ -154,8 +161,8 @@ df = pd.DataFrame(
         "trial",
         "lay.depth.to.top",
         "lay.depth.to.bottom",
-    ],
-    # + reflectance.index.astype(int).to_list(),
+    ]
+    + reflectance.index.astype(int).to_list(),
 ).sort_values(by=["sample_id", "lay.depth.to.top", "lay.depth.to.bottom", "trial"])
 
 # DROP ALL SAMPLES WITH MISSING VALUES
