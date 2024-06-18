@@ -31,9 +31,9 @@ for path_str in tqdm(glob.glob(dataset_root + "/**/*.xlsx", recursive=True)):
 
         for name in treatment_names:
             human_name = name
-            print(name)
             name: str
             name = name.strip()
+            name = name.lower()
             name = name.replace(" row", "-r")
             name = name.replace(" ", "-")
             name = name.replace(" #", "-")
@@ -42,7 +42,11 @@ for path_str in tqdm(glob.glob(dataset_root + "/**/*.xlsx", recursive=True)):
             name = name.replace("gh-", "gh")
             name = name.replace("field-", "field")
             name = name.replace("native-", "native")
-            name = name.lower()
+            name = name.replace("ht-", "ht")
+            name = name.replace("row", "r")
+            name = name.replace("r-", "r")
+
+            print(f"{human_name} -> {name}")
 
             human_to_permanent_treatments[human_name] = name
 

@@ -23,7 +23,9 @@ print(human_to_permanent_treatments)
 
 frames = []
 
-for path_str in tqdm(glob.glob(dataset_root + "/**/*.xlsx", recursive=True)):
+for path_str in tqdm(
+    glob.glob(dataset_root + "/**/sand_clay_silt.xlsx", recursive=True)
+):
     total_files += 1
 
     # print(path_str)
@@ -33,6 +35,19 @@ for path_str in tqdm(glob.glob(dataset_root + "/**/*.xlsx", recursive=True)):
         xlsx_df = pd.read_excel(path_str)
 
         xlsx_df = xlsx_df.replace(human_to_permanent_treatments)
+
+        xlsx_df["sample_id"] = (
+            xlsx_df["treatment"].astype(str)
+            + "_"
+            + xlsx_df["lay.depth.to.top"].astype(int).astype(str)
+            + "-"
+            + xlsx_df["lay.depth.to.bottom"].astype(int).astype(str)
+            + "cm"
+        )
+
+        xlsx_df.set_index("sample_id").sort_index().to_excel(
+            path_str.rsplit(".")[-2] + "_permanent_ids.xlsx"
+        )
 
         frames.append(xlsx_df)
 
@@ -52,23 +67,15 @@ df = df.groupby(
     ["treatment", "lay.depth.to.top", "lay.depth.to.bottom"], as_index=False
 )[cols].first()
 
-df["sample_id"] = (
-    df["treatment"].astype(str)
-    + "_"
-    + df["lay.depth.to.top"].astype(int).astype(str)
-    + "-"
-    + df["lay.depth.to.bottom"].astype(int).astype(str)
-    + "cm"
-)
 
-asd_csv["sample_id"] = (
-    asd_csv["treatment"].astype(str)
-    + "_"
-    + asd_csv["lay.depth.to.top"].astype(int).astype(str)
-    + "-"
-    + asd_csv["lay.depth.to.bottom"].astype(int).astype(str)
-    + "cm"
-)
+# asd_csv["sample_id"] = (
+#     asd_csv["treatment"].astype(str)
+#     + "_"
+#     + asd_csv["lay.depth.to.top"].astype(int).astype(str)
+#     + "-"
+#     + asd_csv["lay.depth.to.bottom"].astype(int).astype(str)
+#     + "cm"
+# )
 
 df.set_index("sample_id", inplace=True)
 asd_csv.set_index("sample_id", inplace=True)
@@ -76,24 +83,36 @@ asd_csv.set_index("sample_id", inplace=True)
 print(df)
 print(asd_csv)
 
-df3 = (
+merged_df = (
     pd.merge(
         asd_csv,
         df,
         how="left",
         left_index=True,
         right_index=True,
-        suffixes=("", "_y"),
     )
     .reset_index()
     .drop_duplicates(subset=["sample_id", "trial"])
     .set_index("sample_id")
 )
 
-df3.drop(df3.filter(regex="_y$").columns, axis=1, inplace=True)
-df3.drop(df3.filter(regex="_x$").columns, axis=1, inplace=True)
+# merged_df = df
+
+# df3.drop(df3.filter(regex="_y$").columns, axis=1, inplace=True)
+# merged_df.drop(merged_df.filter(regex="_x$").columns, axis=1, inplace=True)
+
+# df3 = df3.dropna(axis=0, subset=["clay_tot_psa"])
+
+# merged_df = merged_df[merged_df["source_sheet"] == "Tucker-physical indicators"]
 
 print(asd_csv)
 print(df)
-print(df3)
-df3.to_csv("merged_xlsx.csv")
+print(merged_df)
+
+nan_rate = merged_df.isna().sum() / 31.200
+nan_rate.to_clipboard()
+
+merged_df.to_csv("merged_xlsx.csv")
+merged_df.to_excel("merged.xlsx")
+
+merged_df.head(30).to_clipboard()
