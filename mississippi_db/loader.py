@@ -30,19 +30,18 @@ def load(
 
     # if include_ec:
     #     dataset = dataset.dropna(axis="index", subset=["ec_12pre"])
-
-    # Split into train and test
-    train_dataset = dataset.sample(frac=train_split, random_state=0)
-    test_dataset = dataset.drop(train_dataset.index)
-
     spectra_column_names = []
-
     for col_name in list(dataset):
         try:
             float(col_name)
         except ValueError:
             continue
         spectra_column_names.append(col_name)
+    dataset = dataset.dropna(axis="index", subset=spectra_column_names)
+
+    # Split into train and test
+    train_dataset = dataset.sample(frac=train_split, random_state=0)
+    test_dataset = dataset.drop(train_dataset.index)
 
     # NOTE: We assume that a column contains spectral data IFF the column name is a float,
     # and that this column name is a wavelength in nm.
@@ -50,27 +49,13 @@ def load(
     X_test = test_dataset.loc[:, spectra_column_names]
 
     if include_depth:
-        # Clean up depth column
-        depths = dataset["Sample_Depth"]
 
-        start_depth = (
-            dataset["Sample_Depth"]
-            .map(lambda x: x.split("-")[0])
-            .astype(float)
-            .rename("lay.depth.to.top")
+        X_train = X_train.join(
+            train_dataset.loc[:, ["lay.depth.to.bottom", "lay.depth.to.top"]]
         )
-        end_depth = (
-            dataset["Sample_Depth"]
-            .map(lambda x: x.split("-")[1])
-            .astype(float)
-            .rename("lay.depth.to.bottom")
+        X_test = X_test.join(
+            test_dataset.loc[:, ["lay.depth.to.bottom", "lay.depth.to.top"]]
         )
-
-        dataset = dataset.join(start_depth)
-        dataset = dataset.join(end_depth)
-
-        X_train = X_train.join(start_depth)
-        X_test = X_test.join(end_depth)
 
     Y_train = train_dataset.loc[:, labels]
     Y_test = test_dataset.loc[:, labels]
@@ -83,7 +68,5 @@ def load(
     if normalize_Y:
         Y_train = (Y_train - Y_train.mean()) / Y_train.std()
         Y_test = (Y_test - Y_test.mean()) / Y_test.std()
-
-    print(X_train.dtypes)
 
     return (X_train, Y_train), (X_test, Y_test)

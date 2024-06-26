@@ -66,17 +66,6 @@ df = df.groupby(
     ["treatment", "lay.depth.to.top", "lay.depth.to.bottom"], as_index=False
 )[cols].first()
 
-
-# asd_csv["sample_id"] = (
-#     asd_csv["treatment"].astype(str)
-#     + "_"
-#     + asd_csv["lay.depth.to.top"].astype(int).astype(str)
-#     + "-"
-#     + asd_csv["lay.depth.to.bottom"].astype(int).astype(str)
-#     + "cm"
-# )
-
-
 print(df)
 print(asd_csv)
 
@@ -102,25 +91,20 @@ merged_df = (
 #     .first()
 # )
 
-# merged_df = df
+# merged_df = merged_df.dropna(axis=0, subset=["clay_tot_psa"])
 
-# df3.drop(df3.filter(regex="_y$").columns, axis=1, inplace=True)
-# merged_df.drop(merged_df.filter(regex="_x$").columns, axis=1, inplace=True)
+nonnan = merged_df.shape[0] - merged_df.isna().sum()
 
-merged_df = merged_df.dropna(axis=0, subset=["clay_tot_psa"])
+print(nonnan)
+nonnan.to_excel("nonnan.xlsx")
 
-print(merged_df.groupby("group").count())
+# nonnan
 
-# merged_df = merged_df[merged_df["source_sheet"] == "Tucker-physical indicators"]
 
-# print(asd_csv)
-# print(df)
-# print(merged_df)
+# print(merged_df.groupby("group").count())
 
-nan_rate = merged_df.isna().sum() / 31.200
-nan_rate.to_clipboard()
+# print("Writing to CSV")
+# merged_df.to_csv("mississippi_db.csv")
 
-merged_df.to_csv("mississippi_db.csv")
-merged_df.to_excel("merged.xlsx")
-
-merged_df.head(30).to_clipboard()
+# print("Writing to Excel")
+# merged_df.to_excel("merged.xlsx")

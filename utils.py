@@ -183,8 +183,8 @@ def describeAccuracies(
 
 
 def plotLoss(history):
-    plt.plot(history.history["loss"], label="loss")
-    plt.plot(history.history["val_loss"], label="val_loss")
+    plt.plot(history["loss"], label="loss")
+    plt.plot(history["val_loss"], label="val_loss")
     # plt.ylim([0, 3])
     plt.xlabel("Epoch")
     plt.ylabel("Error")
