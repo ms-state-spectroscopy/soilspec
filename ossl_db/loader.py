@@ -4,6 +4,17 @@ from halo import Halo
 SPECTRUM_START_COLUMN = 16
 
 
+def getPicklePath(labels):
+    base = "/home/main/ossl/ossl_"
+
+    for label in labels:
+        assert isinstance(label, str)
+        base += f"{label}_"
+
+    base += ".pkl"
+    return base
+
+
 def load(
     labels: list[str],
     include_ec=True,
@@ -25,7 +36,7 @@ def load(
     """
 
     if from_pkl:
-        dataset = pd.read_pickle("/home/main/ossl/ossl.pkl")
+        dataset = pd.read_pickle(getPicklePath(labels))
 
     else:
         with Halo(text="Reading scan CSV"):
@@ -80,9 +91,9 @@ def load(
         non_nans = len(dataset) - dataset.isna().sum()
         non_nans.to_csv("ossl_db/non-nan_counts.csv")
 
-        print("Saving to Pickle.")
-        with Halo(text="Saving to ossl.pkl"):
-            dataset.to_pickle("/home/main/ossl/ossl.pkl")
+        print("Saving to " + getPicklePath(labels))
+        with Halo(text="Saving to " + getPicklePath(labels)):
+            dataset.to_pickle(getPicklePath(labels))
 
     spectra_column_names = []
     for col_name in list(dataset):
@@ -134,7 +145,12 @@ def load(
     print(X_train.dtypes)
 
     if normalize_Y:
-        return (X_train, Y_train), (X_test, Y_test), original_label_mean, original_label_std
+        return (
+            (X_train, Y_train),
+            (X_test, Y_test),
+            original_label_mean,
+            original_label_std,
+        )
     else:
         return (X_train, Y_train), (X_test, Y_test)
 

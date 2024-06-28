@@ -10,3 +10,4 @@ kaggle-comp/*/*.csv
 *.keras
 neospectra_db/*.csv
 neospectra_db/*.zip
+lightning_logs/

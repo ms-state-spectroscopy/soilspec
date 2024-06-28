@@ -5,6 +5,8 @@ from scipy.stats import zscore
 import seaborn as sns
 from matplotlib.axes import Axes
 from tensorflow import keras
+from torch.utils.data import Dataset, DataLoader
+import pandas as pd
 
 
 def describeAccuracy(Y_true: pd.DataFrame, Y_pred: pd.DataFrame):
@@ -226,3 +228,20 @@ def plotSpectraFromSet(df: pd.DataFrame, n=1):
     plt.plot(X, spectra.iloc[indices].T)
     plt.ylim([0, 100])
     plt.show()
+
+
+class CustomDataset(Dataset):
+    def __init__(self, X, Y):
+        self.X: pd.DataFrame = X
+        self.Y: pd.DataFrame = Y
+
+        assert isinstance(Y, pd.DataFrame)
+
+    def __getitem__(self, index):
+        # row = self.dataframe.iloc[index].to_numpy()
+        features = self.X.iloc[index, :].to_numpy().astype(np.float32)
+        label = self.Y.iloc[index, :].to_numpy().astype(np.float32)
+        return features, label
+
+    def __len__(self):
+        return len(self.X)

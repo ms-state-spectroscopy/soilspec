@@ -12,7 +12,7 @@ Steps:
 
 import pandas as pd
 import neospectra
-import utils
+import analyzers.utils as utils
 from analyzers.mlp import MlpAnalyzer
 
 if __name__ == "__main__":

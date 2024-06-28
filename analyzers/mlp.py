@@ -38,11 +38,11 @@ class MlpAnalyzer(Analyzer):
                     activation=activation,
                     activity_regularizer=regularizers.l2(0.01),
                 ),
-                layers.Dense(
-                    hidden_size,
-                    activation=activation,
-                    activity_regularizer=regularizers.l2(0.01),
-                ),
+                # layers.Dense(
+                #     hidden_size,
+                #     activation=activation,
+                #     activity_regularizer=regularizers.l2(0.01),
+                # ),
                 layers.Dense(n_logits),
             ]
         )
@@ -55,6 +55,12 @@ class MlpAnalyzer(Analyzer):
             loss="mean_absolute_error",
             optimizer=tf.keras.optimizers.Adam(lr),
         )
+
+    def setHeadWeights(self, new_weights):
+        self.model.get_layer(index=-2).set_weights(new_weights)
+
+    def getHeadWeights(self):
+        return self.model.get_layer(index=-2).get_weights()
 
     def train(
         self,
@@ -144,18 +150,20 @@ class MlpAnalyzer(Analyzer):
                     f"Val loss:{float(val_loss):.3f}. Best: {best_val_loss:.3f}. Waiting {epochs_until_stop} epochs."
                 )
 
-            # return self.model.fit(
-            #     X,
-            #     Y,
-            #     batch_size=batch_size,
-            #     epochs=epochs,
-            #     validation_split=val_split,
-            #     callbacks=[
-            #         callbacks.EarlyStopping(
-            #             monitor="val_loss", patience=early_stop_patience
-            #         )
-            #     ],
-            # )
+        return history
+
+        # return self.model.fit(
+        #     X,
+        #     Y,
+        #     batch_size=batch_size,
+        #     epochs=epochs,
+        #     validation_split=val_split,
+        #     callbacks=[
+        #         callbacks.EarlyStopping(
+        #             monitor="val_loss", patience=early_stop_patience
+        #         )
+        #     ],
+        # )
 
     def predict(self, X: pd.DataFrame):
         return self.model.predict(X)

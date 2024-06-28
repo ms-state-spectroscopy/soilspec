@@ -20,7 +20,9 @@ import neospectra
 import pickle
 import analyzers.utils as utils
 from analyzers.mlp import MlpAnalyzer
+from analyzers.lightning_mlp import LightningMlpAnalyzer
 from tqdm import tqdm
+import torch
 
 parser = argparse.ArgumentParser()
 
@@ -29,10 +31,11 @@ parser.add_argument(
     "-s", "--save_analyzer", help="Save the Analyzer as a .pkl", action="store_true"
 )
 parser.add_argument(
-    "-l", "--load_analyzer", help="Load Analyzer from a .pkl", action="store_true"
+    "-l", "--load_analyzer", help="Load Analyzer from a .ckpt file"
 )
 parser.add_argument("-k", "--skip_training", help="Skip training", action="store_true")
 args = parser.parse_args()
+
 
 if __name__ == "__main__":
 
@@ -82,14 +85,14 @@ if __name__ == "__main__":
 
     # 2. Instantiate an Analyzer.
     if args.load_analyzer:
-        with open("analyzer.pkl", "rb") as f:
-            analyzer = pickle.load(f)
-        with open("head_weights.pkl", "rb") as f:
-
-            head_weights = pickle.load(f)
+        analyzer = LightningMlpAnalyzer(
+            checkpoint_path=args.load_analyzer
+        )
     else:
         # 1 logit-- only one feature at a time
-        analyzer = MlpAnalyzer(n_logits=1, hidden_size=200, lr=1e-4)
+        analyzer = LightningMlpAnalyzer(
+            n_logits=1, hidden_size=200, lr=1e-4, input_size=X_train.shape[1]
+        )
 
     # 3. Train the Analyzer on the training data.
 
@@ -102,24 +105,11 @@ if __name__ == "__main__":
             for label in physical_indicators:
                 (X_train, Y_train), (X_test, Y_test) = separate_dsets[label]
 
+                train_dataset = utils.CustomDataset(X_train, Y_train)
+
                 print(f"Training on {label}")
 
-                if head_weights[label] is not None:
-                    analyzer.setHeadWeights(head_weights[label])
-                history = analyzer.train(
-                    X_train, Y_train, epochs=1, early_stop_patience=10, batch_size=64
-                )
-                head_weights[label] = analyzer.getHeadWeights()
-                # Save the model.
-                if args.save_analyzer:
-                    with open("analyzer.pkl", "wb") as f:
-                        pickle.dump(analyzer, f)
-
-                    with open("head_weights.pkl", "wb") as f:
-                        pickle.dump(head_weights, f)
-
-                pbar.update()
-            # utils.plotLoss(history)
+                analyzer.train(train_dataset)
 
     for label in physical_indicators:
         (X_train, Y_train), (X_test, Y_test) = separate_dsets[label]
