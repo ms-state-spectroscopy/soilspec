@@ -18,50 +18,125 @@ import torch.utils.data as data_utils
 # from torchvision.datasets import MNIST
 # from torchvision.transforms import ToTensor
 import lightning as L
+from lightning.pytorch.utilities import CombinedLoader
+
+
+class MultiTaskNetwork(nn.Module):
+    def __init__(
+        self,
+        labels: list,
+        input_dim: int = None,
+        hidden_dim: int = 200,
+        output_dim: int = 1,
+    ):
+        super(MultiTaskNetwork, self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.labels: list[str] = labels
+        self.task_idx = 0
+
+        self.hidden = nn.Sequential(
+            (
+                nn.Linear(input_dim, hidden_dim)
+                if input_dim is not None
+                else nn.LazyLinear(hidden_dim)
+            ),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+        )
+
+        self.heads = nn.ModuleList([nn.Linear(hidden_dim, output_dim) for _ in labels])
+
+        # self.final_0 = nn.Linear(hidden_dim, output_dim)
+        # self.final_1 = nn.Linear(hidden_dim, output_dim)
+
+    def getTaskLabel(self):
+        return self.labels[self.task_idx]
+
+    def setTask(self, label: str):
+        self.task_idx = self.labels.index(label)
+
+    def switchToNextTask(self):
+        self.task_idx += 1
+        self.task_idx %= len(self.labels)
+        print(f"Switching to {self.labels[self.task_idx]}")
+
+    def forward(self, x: torch.Tensor, task_label: str):
+        self.setTask(task_label)
+
+        x = self.hidden(x)
+
+        x = self.heads[self.task_idx](x)
+
+        # if task_id == 0:
+        #     x = self.final_0(x)
+        # elif task_id == 1:
+        #     x = self.final_1(x)
+        # else:
+        #     raise ValueError("Invalid Task ID")
+
+        return x
 
 
 # define the LightningModule
 class LitMlp(L.LightningModule):
-    def __init__(self, model):
+    def __init__(self, model: MultiTaskNetwork):
         super().__init__()
         torch.set_float32_matmul_precision("medium")
         self.model = model
 
     def training_step(self, batch, batch_idx):
-        # training_step defines the train loop.
-        # it is independent of forward
-        x, y = batch
-        x = x.view(x.size(0), -1)
-        y_pred = self.model(x)
-        loss = nn.functional.mse_loss(y_pred, y)
+
+        losses = []
+        for label, (x, y) in batch.items():
+            # print(label, x, y)
+            x = x.view(x.size(0), -1)
+            y_pred = self.model(x, label)
+            losses.append(nn.functional.mse_loss(y_pred, y).reshape(1))
+
+        # print(losses)
+        loss = torch.sum(torch.cat(losses))
         # Logging to TensorBoard (if installed) by default
-        self.log("train_loss", loss)
+        self.log(f"train_loss_{self.model.getTaskLabel()}", loss)
         return loss
 
     def test_step(self, batch, batch_idx):
-        # this is the test loop
-        x, y = batch
-        x = x.view(x.size(0), -1)
-        y_pred = self.model(x)
-        test_loss = nn.functional.mse_loss(y_pred, y)
-        self.log("test_loss", test_loss)
+
+        for label, (x, y) in batch.items():
+            # print(label, x, y)
+            x = x.view(x.size(0), -1)
+            y_pred = self.model(x, label)
+            test_loss = nn.functional.mse_loss(y_pred, y)
+            self.log(f"test_loss_{self.model.getTaskLabel()}", test_loss)
 
     def validation_step(self, batch, batch_idx):
         # this is the validation loop
-        x, y = batch
-        x = x.view(x.size(0), -1)
-        y_pred = self.model(x)
-        val_loss = nn.functional.mse_loss(y_pred, y)
-        self.log("val_loss", val_loss)
+        # print(batch)
+
+        for label, (x, y) in batch.items():
+            # print(label, x, y)
+            x = x.view(x.size(0), -1)
+            y_pred = self.model(x, label)
+            val_loss = nn.functional.mse_loss(y_pred, y)
+            self.log(f"val_loss_{self.model.getTaskLabel()}", val_loss)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=1e-4)
         return optimizer
 
+    # def on_train_epoch_end(self):
+    #     self.model.switchToNextTask()
+
 
 class LightningMlpAnalyzer(Analyzer):
     def __init__(
         self,
+        datasets,
+        labels,
         verbose: int = 0,
         lr=1e-3,
         hidden_size=200,
@@ -72,26 +147,14 @@ class LightningMlpAnalyzer(Analyzer):
     ) -> None:
         super().__init__(verbose=verbose)
 
+        self.datasets = datasets
+        self.labels = labels
+
         self.activation = activation
         self.lr = lr
         self.hidden_size = hidden_size
 
-        # self.normalizer = tf.keras.layers.Normalization(axis=-1)
-
-        self.model = nn.Sequential(
-            (
-                nn.Linear(input_size, hidden_size)
-                if input_size is not None
-                else nn.LazyLinear(hidden_size)
-            ),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
-            # 1 logit, 1 feature predicted at a time
-            nn.Linear(hidden_size, 1),
-        )
+        self.model = MultiTaskNetwork(labels, input_size, hidden_size)
 
         self.lit_model = LitMlp(self.model)
 
@@ -101,36 +164,7 @@ class LightningMlpAnalyzer(Analyzer):
                 checkpoint_path=checkpoint_path, model=self.model
             )
 
-        # self.model = keras.Sequential(
-        #     [
-        #         self.normalizer,
-        #         layers.Dense(
-        #             hidden_size,
-        #             activation=activation,
-        #             activity_regularizer=regularizers.l2(0.01),
-        #         ),
-        #         layers.Dense(
-        #             hidden_size,
-        #             activation=activation,
-        #             activity_regularizer=regularizers.l2(0.01),
-        #         ),
-        #         # layers.Dense(
-        #         #     hidden_size,
-        #         #     activation=activation,
-        #         #     activity_regularizer=regularizers.l2(0.01),
-        #         # ),
-        #         layers.Dense(n_logits),
-        #     ]
-        # )
-
-        # self.optimizer = tf.keras.optimizers.Adam(lr)
-
-        # self.loss_fn = nn.functional.mse_loss
-
-        # self.model.compile(
-        #     loss="mean_absolute_error",
-        #     optimizer=tf.keras.optimizers.Adam(lr),
-        # )
+        self.trainer = L.Trainer(accelerator="gpu", limit_val_batches=100)
 
     def setHeadWeights(self, new_weights):
         self.model.get_layer(index=-2).set_weights(new_weights)
@@ -138,30 +172,33 @@ class LightningMlpAnalyzer(Analyzer):
     def getHeadWeights(self):
         return self.model.get_layer(index=-2).get_weights()
 
-    def train(
-        self,
-        dataset: CustomDataset,
-        epochs=500,
-        val_split=0.2,
-        early_stop_patience=50,
-        batch_size=32,
-    ):
-        # use 20% of training data for validation
-        train_set_size = int(len(dataset) * 0.8)
-        valid_set_size = len(dataset) - train_set_size
+    def train(self):
+        train_loaders = {}
+        val_loaders = {}
+        for label in self.labels:
+            dataset = self.datasets[label]["train"]
+            # use 20% of training data for validation
+            train_set_size = int(len(dataset) * 0.8)
+            valid_set_size = len(dataset) - train_set_size
+            seed = torch.Generator().manual_seed(42)
+            train_set, valid_set = torch.utils.data.random_split(
+                dataset, [train_set_size, valid_set_size], generator=seed
+            )
+            train_loaders[label] = data_utils.DataLoader(
+                train_set, batch_size=10, shuffle=True, num_workers=19
+            )
+            # train = data_utils.TensorDataset(X.values, Y.values)
+            train_loaders[label] = data_utils.DataLoader(
+                train_set, batch_size=10, shuffle=True, num_workers=19
+            )
+            val_loaders[label] = data_utils.DataLoader(
+                valid_set, batch_size=10, num_workers=19
+            )
 
-        # split the train set into two
-        seed = torch.Generator().manual_seed(42)
-        train_set, valid_set = torch.utils.data.random_split(
-            dataset, [train_set_size, valid_set_size], generator=seed
-        )
-        # train = data_utils.TensorDataset(X.values, Y.values)
-        train_loader = data_utils.DataLoader(
-            train_set, batch_size=10, shuffle=True, num_workers=19
-        )
-        valid_loader = data_utils.DataLoader(valid_set, batch_size=10, num_workers=19)
-        trainer = L.Trainer(max_epochs=epochs, accelerator="gpu", limit_val_batches=100)
-        trainer.fit(self.lit_model, train_loader, valid_loader)
+        combined_train_loader = CombinedLoader(train_loaders)
+        combined_val_loader = CombinedLoader(val_loaders)
+
+        self.trainer.fit(self.lit_model, combined_train_loader, combined_val_loader)
 
     def predict(self, X: pd.DataFrame):
         return self.model.predict(X)

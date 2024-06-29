@@ -23,6 +23,7 @@ from analyzers.mlp import MlpAnalyzer
 from analyzers.lightning_mlp import LightningMlpAnalyzer
 from tqdm import tqdm
 import torch
+import time
 
 parser = argparse.ArgumentParser()
 
@@ -30,9 +31,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "-s", "--save_analyzer", help="Save the Analyzer as a .pkl", action="store_true"
 )
-parser.add_argument(
-    "-l", "--load_analyzer", help="Load Analyzer from a .ckpt file"
-)
+parser.add_argument("-l", "--load_analyzer", help="Load Analyzer from a .ckpt file")
 parser.add_argument("-k", "--skip_training", help="Skip training", action="store_true")
 args = parser.parse_args()
 
@@ -57,7 +56,6 @@ if __name__ == "__main__":
     ]
 
     separate_dsets = {}
-    head_weights = {}
 
     for label in physical_indicators:
         (
@@ -72,44 +70,43 @@ if __name__ == "__main__":
             normalize_Y=True,
         )
 
-        separate_dsets[label] = (X_train, Y_train), (X_test, Y_test)
-        head_weights[label] = None
-
-    # print(X_train)
-    # print(X_train.isna().sum())
-
-    # print(Y_train)
-    # print(Y_train.isna().sum())
-
-    # utils.plotSpectraFromSet(X_train, n=10)
+        separate_dsets[label] = {
+            "train": utils.CustomDataset(X_train, Y_train),
+            "test": utils.CustomDataset(X_test, Y_test),
+        }
 
     # 2. Instantiate an Analyzer.
     if args.load_analyzer:
         analyzer = LightningMlpAnalyzer(
-            checkpoint_path=args.load_analyzer
+            checkpoint_path=args.load_analyzer,
+            datasets=separate_dsets,
+            labels=physical_indicators,
         )
     else:
         # 1 logit-- only one feature at a time
         analyzer = LightningMlpAnalyzer(
-            n_logits=1, hidden_size=200, lr=1e-4, input_size=X_train.shape[1]
+            datasets=separate_dsets,
+            labels=physical_indicators,
+            n_logits=1,
+            hidden_size=200,
+            lr=1e-4,
+            input_size=X_train.shape[1],
+            # logdir=time.strftime("%Y_%m_%d-%H_%M"),
         )
 
     # 3. Train the Analyzer on the training data.
 
     if not args.skip_training:
-        num_loops = 100
-        total_iters = num_loops * len(physical_indicators)
-        pbar = tqdm(total=total_iters)
-        for i in range(num_loops):
-            print(f"ITER {i+1}/{num_loops}")
-            for label in physical_indicators:
-                (X_train, Y_train), (X_test, Y_test) = separate_dsets[label]
+        # num_loops = 100
+        # total_iters = num_loops * len(physical_indicators)
+        # pbar = tqdm(total=total_iters)
+        # for i in range(num_loops):
+        #     print(f"ITER {i+1}/{num_loops}")
+        #     for label in physical_indicators:
 
-                train_dataset = utils.CustomDataset(X_train, Y_train)
+        #         print(f"Training on {label}")
 
-                print(f"Training on {label}")
-
-                analyzer.train(train_dataset)
+        analyzer.train()
 
     for label in physical_indicators:
         (X_train, Y_train), (X_test, Y_test) = separate_dsets[label]

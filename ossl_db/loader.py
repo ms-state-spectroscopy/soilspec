@@ -1,5 +1,6 @@
 import pandas as pd
 from halo import Halo
+from torch.utils.data import Dataset
 
 SPECTRUM_START_COLUMN = 16
 
@@ -153,6 +154,22 @@ def load(
         )
     else:
         return (X_train, Y_train), (X_test, Y_test)
+
+
+def getPytorchDataset(
+    labels: list[str],
+    include_ec=True,
+    include_depth=True,
+    train_split=0.75,
+    normalize_Y=False,
+    from_pkl=False,
+):
+    (
+        (X_train, Y_train),
+        (X_test, Y_test),
+        original_label_mean,
+        original_label_std,
+    ) = load(labels, include_ec, include_depth, include_depth, train_split, normalize_Y)
 
 
 if __name__ == "__main__":
