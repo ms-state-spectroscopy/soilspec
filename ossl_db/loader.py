@@ -105,6 +105,8 @@ def load(
         ):
             spectra_column_names.append(col_name)
 
+
+
     dataset.loc[:, spectra_column_names].isna().sum().to_csv(
         "ossl_db/spectrum_nan_counts.csv"
     )
@@ -143,7 +145,7 @@ def load(
     Y_train = train_dataset.loc[:, labels]
     Y_test = test_dataset.loc[:, labels]
 
-    print(X_train.dtypes)
+    # print(X_train.dtypes)
 
     if normalize_Y:
         return (

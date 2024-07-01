@@ -73,12 +73,12 @@ df.set_index("sample_id", inplace=True)
 asd_csv.set_index("sample_id", inplace=True)
 merged_df = (
     pd.merge(
-        asd_csv,
         df,
+        asd_csv,
         how="outer",
         left_index=True,
         right_index=True,
-        suffixes=("_x", None),
+        suffixes=(None, "_x"),
     )
     .reset_index()
     .drop_duplicates(subset=["sample_id", "trial"])
@@ -104,7 +104,7 @@ nonnan.to_excel("nonnan.xlsx")
 # print(merged_df.groupby("group").count())
 
 # print("Writing to CSV")
-# merged_df.to_csv("mississippi_db.csv")
+merged_df.to_csv("mississippi_db.csv")
 
 # print("Writing to Excel")
 # merged_df.to_excel("merged.xlsx")

@@ -45,14 +45,9 @@ class MultiTaskNetwork(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
         )
 
         self.heads = nn.ModuleList([nn.Linear(hidden_dim, output_dim) for _ in labels])
-
-        # self.final_0 = nn.Linear(hidden_dim, output_dim)
-        # self.final_1 = nn.Linear(hidden_dim, output_dim)
 
     def getTaskLabel(self):
         return self.labels[self.task_idx]
@@ -66,18 +61,13 @@ class MultiTaskNetwork(nn.Module):
         print(f"Switching to {self.labels[self.task_idx]}")
 
     def forward(self, x: torch.Tensor, task_label: str):
+
         self.setTask(task_label)
 
         x = self.hidden(x)
 
+        # print(f"Switching to task {self.getTaskLabel()}")
         x = self.heads[self.task_idx](x)
-
-        # if task_id == 0:
-        #     x = self.final_0(x)
-        # elif task_id == 1:
-        #     x = self.final_1(x)
-        # else:
-        #     raise ValueError("Invalid Task ID")
 
         return x
 
@@ -101,7 +91,7 @@ class LitMlp(L.LightningModule):
         # print(losses)
         loss = torch.sum(torch.cat(losses))
         # Logging to TensorBoard (if installed) by default
-        self.log(f"train_loss_{self.model.getTaskLabel()}", loss)
+        self.log(f"train_loss", loss)
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -117,12 +107,18 @@ class LitMlp(L.LightningModule):
         # this is the validation loop
         # print(batch)
 
+        val_losses = {}
+
         for label, (x, y) in batch.items():
             # print(label, x, y)
             x = x.view(x.size(0), -1)
             y_pred = self.model(x, label)
             val_loss = nn.functional.mse_loss(y_pred, y)
-            self.log(f"val_loss_{self.model.getTaskLabel()}", val_loss)
+            val_losses[f"val_loss_{self.model.getTaskLabel()}"] = val_loss
+            # self.log()
+
+        tensorboard = self.logger.experiment
+        tensorboard.add_scalars(f"val_loss", val_losses, self.current_epoch)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=1e-4)
@@ -144,6 +140,7 @@ class LightningMlpAnalyzer(Analyzer):
         n_logits=3,
         input_size=None,
         checkpoint_path=None,
+        max_train_epochs: int = 1000,
     ) -> None:
         super().__init__(verbose=verbose)
 
@@ -164,13 +161,9 @@ class LightningMlpAnalyzer(Analyzer):
                 checkpoint_path=checkpoint_path, model=self.model
             )
 
-        self.trainer = L.Trainer(accelerator="gpu", limit_val_batches=100)
-
-    def setHeadWeights(self, new_weights):
-        self.model.get_layer(index=-2).set_weights(new_weights)
-
-    def getHeadWeights(self):
-        return self.model.get_layer(index=-2).get_weights()
+        self.trainer = L.Trainer(
+            accelerator="gpu", limit_val_batches=100, max_epochs=max_train_epochs
+        )
 
     def train(self):
         train_loaders = {}
@@ -181,24 +174,50 @@ class LightningMlpAnalyzer(Analyzer):
             train_set_size = int(len(dataset) * 0.8)
             valid_set_size = len(dataset) - train_set_size
             seed = torch.Generator().manual_seed(42)
-            train_set, valid_set = torch.utils.data.random_split(
+            train_set, val_set = torch.utils.data.random_split(
                 dataset, [train_set_size, valid_set_size], generator=seed
             )
-            train_loaders[label] = data_utils.DataLoader(
-                train_set, batch_size=10, shuffle=True, num_workers=19
-            )
-            # train = data_utils.TensorDataset(X.values, Y.values)
+
             train_loaders[label] = data_utils.DataLoader(
                 train_set, batch_size=10, shuffle=True, num_workers=19
             )
             val_loaders[label] = data_utils.DataLoader(
-                valid_set, batch_size=10, num_workers=19
+                val_set, batch_size=10, num_workers=19
             )
 
         combined_train_loader = CombinedLoader(train_loaders)
         combined_val_loader = CombinedLoader(val_loaders)
+        iter(combined_train_loader)
+        iter(combined_val_loader)
+        print("TRAIN SET")
+        print(len(combined_train_loader))
+        print("VAL SET")
+        print(len(combined_val_loader))
 
         self.trainer.fit(self.lit_model, combined_train_loader, combined_val_loader)
+
+    def test(self):
+        test_loaders = {}
+        for label in self.labels:
+            dataset = self.datasets[label]["test"]
+            # use 20% of testing data for validation
+            test_set_size = int(len(dataset) * 0.8)
+            valid_set_size = len(dataset) - test_set_size
+            seed = torch.Generator().manual_seed(42)
+            test_set, val_set = torch.utils.data.random_split(
+                dataset, [test_set_size, valid_set_size], generator=seed
+            )
+
+            test_loaders[label] = data_utils.DataLoader(
+                test_set, batch_size=10, shuffle=True, num_workers=19
+            )
+
+        combined_test_loader = CombinedLoader(test_loaders)
+        iter(combined_test_loader)
+        print("TEST SET")
+        print(len(combined_test_loader))
+
+        self.trainer.test(self.lit_model, combined_test_loader)
 
     def predict(self, X: pd.DataFrame):
         return self.model.predict(X)

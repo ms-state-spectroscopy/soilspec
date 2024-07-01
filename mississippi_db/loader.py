@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 SPECTRUM_START_COLUMN = 16
 
@@ -9,6 +10,7 @@ def load(
     include_depth=True,
     train_split=0.75,
     normalize_Y=False,
+    match_ossl_spectra=True,
 ) -> tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]:
     """Load the averaged NIR samples from the Neospectra dataset
 
@@ -25,6 +27,9 @@ def load(
         ["sample_id", "trial"]
     )
 
+    # print(f"MISSISSIPPI DATASET INCLUDES THE FOLLOWING:")
+    # print(list(dataset))
+
     # Drop NaNs for labels
     dataset = dataset.dropna(axis="index", subset=labels)
 
@@ -33,11 +38,31 @@ def load(
     spectra_column_names = []
     for col_name in list(dataset):
         try:
-            float(col_name)
+            wavelength = int(col_name)
+            if match_ossl_spectra:
+                if wavelength >= 400 and wavelength % 2 == 0:
+                    spectra_column_names.append(col_name)
+            else:
+                spectra_column_names.append(col_name)
         except ValueError:
             continue
-        spectra_column_names.append(col_name)
+
+    # dataset.to_csv(f"{labels[0]}.csv")
+
+    before_len = len(dataset)
     dataset = dataset.dropna(axis="index", subset=spectra_column_names)
+    print(
+        f"Dataset length went from {before_len} to {len(dataset)} after dropping nans from spectra"
+    )
+
+    # Save for unnormalization later
+    if normalize_Y:
+        Y = dataset.loc[:, labels]
+        original_label_std = Y.std()
+        original_label_mean = Y.mean()
+
+        # Normalize
+        dataset.loc[:, labels] = (Y - Y.mean()) / Y.std()
 
     # Split into train and test
     train_dataset = dataset.sample(frac=train_split, random_state=0)
@@ -60,13 +85,12 @@ def load(
     Y_train = train_dataset.loc[:, labels]
     Y_test = test_dataset.loc[:, labels]
 
-    # Save for unnormalization later
-    original_test_label_std = Y_test.std()
-    original_test_label_mean = Y_test.mean()
-
-    # Normalize
     if normalize_Y:
-        Y_train = (Y_train - Y_train.mean()) / Y_train.std()
-        Y_test = (Y_test - Y_test.mean()) / Y_test.std()
-
-    return (X_train, Y_train), (X_test, Y_test)
+        return (
+            (X_train, Y_train),
+            (X_test, Y_test),
+            original_label_mean,
+            original_label_std,
+        )
+    else:
+        return (X_train, Y_train), (X_test, Y_test)

@@ -11,3 +11,5 @@ kaggle-comp/*/*.csv
 neospectra_db/*.csv
 neospectra_db/*.zip
 lightning_logs/
+*.csv
+*.xlsx

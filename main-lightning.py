@@ -48,8 +48,8 @@ if __name__ == "__main__":
     physical_indicators = [
         # "cf_usda.c236_w.pct",
         "clay.tot_usda.a334_w.pct",
-        "sand.tot_usda.c60_w.pct",
-        "silt.tot_usda.c62_w.pct",
+        # "sand.tot_usda.c60_w.pct",
+        # "silt.tot_usda.c62_w.pct",
         "bd_usda.a4_g.cm3",
         "wr.1500kPa_usda.a417_w.pct",
         # "awc.33.1500kPa_usda.c80_w.frac",
@@ -75,6 +75,28 @@ if __name__ == "__main__":
             "test": utils.CustomDataset(X_test, Y_test),
         }
 
+    mississippi_labels = ["wilting_point", "field_capacity"]
+
+    for label in mississippi_labels:
+        (
+            (X_train, Y_train),
+            (X_test, Y_test),
+            original_label_mean,
+            original_label_std,
+        ) = mississippi_db.loader.load(
+            include_ec=False,
+            include_depth=False,
+            labels=[label],
+            normalize_Y=True,
+        )
+
+        separate_dsets[label] = {
+            "train": utils.CustomDataset(X_train, Y_train),
+            "test": utils.CustomDataset(X_test, Y_test),
+        }
+
+        # print(f"MS dataset with {label} has shape {Y_train.shape}")
+
     # 2. Instantiate an Analyzer.
     if args.load_analyzer:
         analyzer = LightningMlpAnalyzer(
@@ -86,34 +108,28 @@ if __name__ == "__main__":
         # 1 logit-- only one feature at a time
         analyzer = LightningMlpAnalyzer(
             datasets=separate_dsets,
-            labels=physical_indicators,
+            labels=physical_indicators + mississippi_labels,
             n_logits=1,
             hidden_size=200,
             lr=1e-4,
             input_size=X_train.shape[1],
+            max_train_epochs=5,
             # logdir=time.strftime("%Y_%m_%d-%H_%M"),
         )
 
     # 3. Train the Analyzer on the training data.
 
     if not args.skip_training:
-        # num_loops = 100
-        # total_iters = num_loops * len(physical_indicators)
-        # pbar = tqdm(total=total_iters)
-        # for i in range(num_loops):
-        #     print(f"ITER {i+1}/{num_loops}")
-        #     for label in physical_indicators:
-
-        #         print(f"Training on {label}")
-
         analyzer.train()
 
-    for label in physical_indicators:
-        (X_train, Y_train), (X_test, Y_test) = separate_dsets[label]
-        if head_weights[label] is not None:
-            analyzer.setHeadWeights(head_weights[label])
-        # 4. Evaluate the Analyzer using the test set.
-        Y_pred = analyzer.predict(X_test)
-        Y_pred = pd.DataFrame(data=Y_pred, index=X_test.index, columns=Y_train.columns)
+    analyzer.test()
 
-        utils.describeAccuracy(Y_test, Y_pred)
+    # for label in physical_indicators:
+    #     (X_train, Y_train), (X_test, Y_test) = separate_dsets[label]
+    #     if head_weights[label] is not None:
+    #         analyzer.setHeadWeights(head_weights[label])
+    #     # 4. Evaluate the Analyzer using the test set.
+    #     Y_pred = analyzer.predict(X_test)
+    #     Y_pred = pd.DataFrame(data=Y_pred, index=X_test.index, columns=Y_train.columns)
+
+    #     utils.describeAccuracy(Y_test, Y_pred)
