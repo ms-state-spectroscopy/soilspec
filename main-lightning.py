@@ -113,7 +113,7 @@ if __name__ == "__main__":
             hidden_size=200,
             lr=1e-4,
             input_size=X_train.shape[1],
-            max_train_epochs=5,
+            max_train_epochs=1000,
             # logdir=time.strftime("%Y_%m_%d-%H_%M"),
         )
 
