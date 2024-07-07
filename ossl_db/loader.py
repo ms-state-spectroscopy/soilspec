@@ -105,21 +105,21 @@ def load(
         ):
             spectra_column_names.append(col_name)
 
-
-
     dataset.loc[:, spectra_column_names].isna().sum().to_csv(
         "ossl_db/spectrum_nan_counts.csv"
     )
     dataset = dataset.dropna(axis="index", subset=spectra_column_names)
 
+    Y = dataset.loc[:, labels]
+
+    original_label_max = Y.max()
+    original_label_min = Y.min()
+
     # Save for unnormalization later
     if normalize_Y:
-        Y = dataset.loc[:, labels]
-        original_label_std = Y.std()
-        original_label_mean = Y.mean()
-
         # Normalize
-        dataset.loc[:, labels] = (Y - Y.mean()) / Y.std()
+        dataset.loc[:, labels] -= Y.min()
+        dataset.loc[:, labels] /= Y.max()
 
     # Drop NaNs for labels
     # dataset.dropna(axis="index", subset=labels, inplace=True)
@@ -145,44 +145,9 @@ def load(
     Y_train = train_dataset.loc[:, labels]
     Y_test = test_dataset.loc[:, labels]
 
-    # print(X_train.dtypes)
-
-    if normalize_Y:
-        return (
-            (X_train, Y_train),
-            (X_test, Y_test),
-            original_label_mean,
-            original_label_std,
-        )
-    else:
-        return (X_train, Y_train), (X_test, Y_test)
-
-
-def getPytorchDataset(
-    labels: list[str],
-    include_ec=True,
-    include_depth=True,
-    train_split=0.75,
-    normalize_Y=False,
-    from_pkl=False,
-):
-    (
+    return (
         (X_train, Y_train),
         (X_test, Y_test),
-        original_label_mean,
-        original_label_std,
-    ) = load(labels, include_ec, include_depth, include_depth, train_split, normalize_Y)
-
-
-if __name__ == "__main__":
-    # (X_train, Y_train), (X_test, Y_test) = load(
-    #     labels=["clay_tot_psa", "sand_tot_psa", "silt_tot_psa"], from_pkl=True
-    # )
-
-    (X_train, Y_train), (X_test, Y_test) = load(
-        labels=["ec_12pre"], from_pkl=False
-    )  # 6209
-
-    # print(Y_train)
-    # print(Y_test)
-    # print(len(Y_test) + len(Y_train))
+        original_label_min,
+        original_label_max,
+    )

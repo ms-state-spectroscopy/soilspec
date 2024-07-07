@@ -19,8 +19,23 @@ import ossl_db.loader
 import neospectra
 import pickle
 import analyzers.utils as utils
-from analyzers.mlp import MlpAnalyzer
+
+# from analyzers.mlp import MlpAnalyzer
+from analyzers.lightning_mlp import LightningMlpAnalyzer
+from analyzers.lightning_plain_mlp import LightningPlainMlpAnalyzer
+from analyzers.pi_mlp import PiMlpAnalyzer
 from tqdm import tqdm
+import torch
+import time
+import numpy as np
+
+from matplotlib import pyplot as plt
+
+# Import seaborn
+import seaborn as sns
+
+# Apply the default theme
+sns.set_theme(style="ticks", palette="pastel")
 
 parser = argparse.ArgumentParser()
 
@@ -28,105 +43,115 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "-s", "--save_analyzer", help="Save the Analyzer as a .pkl", action="store_true"
 )
-parser.add_argument(
-    "-l", "--load_analyzer", help="Load Analyzer from a .pkl", action="store_true"
-)
+parser.add_argument("-l", "--load_analyzer", help="Load Analyzer from a .ckpt file")
 parser.add_argument("-k", "--skip_training", help="Skip training", action="store_true")
 args = parser.parse_args()
 
+
 if __name__ == "__main__":
+
+    utils.seedEverything()
 
     # 1. Load the data. This is any set of numerical features (X) and labels (Y),
     # structured as pandas DataFrames and divided into a training and test set.
-    # (X_train, Y_train), (X_test, Y_test) = mississippi_db.loader.load(
-    #     include_ec=True,
-    #     labels=["sand_tot_psa", "clay_tot_psa", "silt_tot_psa"],
-    # )
 
-    physical_indicators = [
+    ossl_labels = [
         # "cf_usda.c236_w.pct",
-        "clay.tot_usda.a334_w.pct",
-        "sand.tot_usda.c60_w.pct",
-        "silt.tot_usda.c62_w.pct",
-        "bd_usda.a4_g.cm3",
-        "wr.1500kPa_usda.a417_w.pct",
+        "oc_usda.c729_w.pct",
+        # "clay.tot_usda.a334_w.pct",
+        # "sand.tot_usda.c60_w.pct",
+        # "silt.tot_usda.c62_w.pct",
+        # "bd_usda.a4_g.cm3",
+        # "wr.1500kPa_usda.a417_w.pct",
         # "awc.33.1500kPa_usda.c80_w.frac",
     ]
 
-    separate_dsets = {}
-    head_weights = {}
+    # mississippi_labels = ["wilting_point", "field_capacity"]
+    mississippi_labels = ["wilting_point"]
+    # mississippi_labels = []
 
-    for label in physical_indicators:
-        (
-            (X_train, Y_train),
-            (X_test, Y_test),
-            original_label_mean,
-            original_label_std,
-        ) = ossl_db.loader.load(
-            include_ec=True,
-            labels=[label],
-            from_pkl=True,
-            normalize_Y=True,
-        )
+    (
+        (X_train, Y_train),
+        (X_test, Y_test),
+        original_label_mean,
+        original_label_std,
+    ) = mississippi_db.loader.load(
+        labels=mississippi_labels,
+        normalize_Y=True,
+        from_pkl=False,
+        include_unlabeled=True,
+        train_split=125 / 225,
+    )
 
-        separate_dsets[label] = (X_train, Y_train), (X_test, Y_test)
-        head_weights[label] = None
+    print(f"Y_train has {len(Y_train)-Y_train.isna().sum().sum()} non-null values")
+    print(
+        f"Y_test has {len(Y_test)-Y_test.isna().sum().sum()} non-null values, {len(Y_test)} total values"
+    )
 
-    # print(X_train)
-    # print(X_train.isna().sum())
+    exit()
 
-    # print(Y_train)
-    # print(Y_train.isna().sum())
+    # X_train, Y_train = utils.augmentSpectra(X_train, Y_train, reps=50)
+    # X_test, Y_test = utils.augmentSpectra(X_test, Y_test, reps=50)
 
-    # utils.plotSpectraFromSet(X_train, n=10)
+    # (
+    #     (X_train, Y_train),
+    #     (X_test, Y_test),
+    #     original_label_mean,
+    #     original_label_std,
+    # ) = ossl_db.loader.load(labels=ossl_labels, normalize_Y=True, from_pkl=True)
+
+    # utils.plotSpectraFromSet(X_train, n=30)
 
     # 2. Instantiate an Analyzer.
-    if args.load_analyzer:
-        with open("analyzer.pkl", "rb") as f:
-            analyzer = pickle.load(f)
-        with open("head_weights.pkl", "rb") as f:
+    # if args.load_analyzer:
+    #     analyzer = LightningMlpAnalyzer(
+    #         checkpoint_path=args.load_analyzer,
+    #         datasets=separate_dsets,
+    #         labels=ossl_labels,
+    #     )
+    # else:
+    #     # 1 logit-- only one feature at a time
+    #     analyzer = LightningMlpAnalyzer(
+    #         datasets=separate_dsets,
+    #         labels=ossl_labels + mississippi_labels,
+    #         n_logits=1,
+    #         hidden_size=200,
+    #         lr=1e-3,
+    #         input_size=X_train.shape[1],
+    #         max_train_epochs=1000,
+    #         batch_size=256,
+    #         # logdir=time.strftime("%Y_%m_%d-%H_%M"),
+    #     )
 
-            head_weights = pickle.load(f)
-    else:
-        # 1 logit-- only one feature at a time
-        analyzer = MlpAnalyzer(n_logits=1, hidden_size=200, lr=1e-4)
+    analyzer = PiMlpAnalyzer(
+        output_size=len(ossl_labels),
+        batch_size=8,
+        max_train_epochs=500,
+        input_size=X_train.shape[1],
+        lr=1e-4,
+        checkpoint_path=args.load_analyzer,
+    )
 
     # 3. Train the Analyzer on the training data.
 
+    # analyzer.hypertune()
+
     if not args.skip_training:
-        num_loops = 100
-        total_iters = num_loops * len(physical_indicators)
-        pbar = tqdm(total=total_iters)
-        for i in range(num_loops):
-            print(f"ITER {i+1}/{num_loops}")
-            for label in physical_indicators:
-                (X_train, Y_train), (X_test, Y_test) = separate_dsets[label]
+        analyzer.train(X_train, Y_train)
 
-                print(f"Training on {label}")
+    # exit()
 
-                if head_weights[label] is not None:
-                    analyzer.setHeadWeights(head_weights[label])
-                history = analyzer.train(
-                    X_train, Y_train, epochs=1, early_stop_patience=10, batch_size=64
-                )
-                head_weights[label] = analyzer.getHeadWeights()
-                # Save the model.
-                if args.save_analyzer:
-                    with open("analyzer.pkl", "wb") as f:
-                        pickle.dump(analyzer, f)
+    analyzer.test(X_test, Y_test)
 
-                    with open("head_weights.pkl", "wb") as f:
-                        pickle.dump(head_weights, f)
+    # test_dset = utils.CustomDataset(X_test, Y_test)
+    # X_test: pd.DataFrame = test_dset.X
+    # Y_test = test_dset.Y
 
-                pbar.update()
-            # utils.plotLoss(history)
+    # 4. Evaluate the Analyzer using the test set.
+    # Passing `label` automatically loads the correct head
+    Y_pred = analyzer.predict(torch.tensor(X_test.to_numpy(dtype=np.float32)))
+    Y_pred = pd.DataFrame(
+        data=Y_pred.detach().numpy(), index=X_test.index, columns=Y_test.columns
+    )
 
-    for label in physical_indicators:
-        (X_train, Y_train), (X_test, Y_test) = separate_dsets[label]
-        if head_weights[label] is not None:
-            analyzer.setHeadWeights(head_weights[label])
-        # 4. Evaluate the Analyzer using the test set.
-        Y_pred = analyzer.predict(X_test)
-        Y_pred = pd.DataFrame(data=Y_pred, index=X_test.index, columns=Y_train.columns)
-
-        utils.describeAccuracy(Y_test, Y_pred)
+    utils.describeAccuracy(Y_test, Y_pred)

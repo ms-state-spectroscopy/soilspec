@@ -1,7 +1,20 @@
 import pandas as pd
 import numpy as np
+from halo import Halo
+
 
 SPECTRUM_START_COLUMN = 16
+
+
+def getPicklePath(labels):
+    base = "mississippi_db/ms_"
+
+    for label in labels:
+        assert isinstance(label, str)
+        base += f"{label}_"
+
+    base += ".pkl"
+    return base
 
 
 def load(
@@ -11,6 +24,8 @@ def load(
     train_split=0.75,
     normalize_Y=False,
     match_ossl_spectra=True,
+    from_pkl=False,
+    include_unlabeled=False,
 ) -> tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]:
     """Load the averaged NIR samples from the Neospectra dataset
 
@@ -23,18 +38,48 @@ def load(
     Returns:
         tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]: _description_
     """
-    dataset = pd.read_csv("mississippi_db/mississippi_db.csv").set_index(
-        ["sample_id", "trial"]
-    )
 
-    # print(f"MISSISSIPPI DATASET INCLUDES THE FOLLOWING:")
-    # print(list(dataset))
+    if from_pkl:
+        try:
+            dataset = pd.read_pickle(getPicklePath(labels))
+        except FileNotFoundError as e:
+            print(f"{getPicklePath(labels)} not found. Falling back to csv.")
+            return load(
+                labels=labels,
+                include_ec=include_ec,
+                include_depth=include_depth,
+                train_split=train_split,
+                normalize_Y=normalize_Y,
+                match_ossl_spectra=match_ossl_spectra,
+                from_pkl=False,
+            )
 
-    # Drop NaNs for labels
-    dataset = dataset.dropna(axis="index", subset=labels)
+    else:
+        dataset = pd.read_csv("mississippi_db/mississippi_db.csv").set_index(
+            ["sample_id", "trial"]
+        )
 
-    # if include_ec:
-    #     dataset = dataset.dropna(axis="index", subset=["ec_12pre"])
+        # Drop samples without spectra
+        dataset = dataset.dropna(axis="index", subset=["path"])
+
+        # print(f"MISSISSIPPI DATASET INCLUDES THE FOLLOWING:")
+        # print(list(dataset))
+
+        # Drop NaNs for labels
+        original_len = len(dataset)
+
+        if include_unlabeled:
+            labeled_dataset = dataset.dropna(axis="index", subset=labels)
+        else:
+            dataset = dataset.dropna(axis="index", subset=labels)
+
+        print(f"Dataset length went from {original_len} to {len(dataset)}")
+
+        # if include_ec:
+        #     dataset = dataset.dropna(axis="index", subset=["ec_12pre"])
+        with Halo(text="Saving to " + getPicklePath(labels)):
+            dataset.to_pickle(getPicklePath(labels))
+
     spectra_column_names = []
     for col_name in list(dataset):
         try:
@@ -65,8 +110,13 @@ def load(
         dataset.loc[:, labels] = (Y - Y.mean()) / Y.std()
 
     # Split into train and test
-    train_dataset = dataset.sample(frac=train_split, random_state=0)
-    test_dataset = dataset.drop(train_dataset.index)
+
+    # If we're including unlabeled data, we only want labeled data in the test set
+    if include_unlabeled:
+        test_dataset = labeled_dataset.sample(frac=1 - train_split, random_state=64)
+    else:
+        test_dataset = dataset.sample(frac=1 - train_split, random_state=64)
+    train_dataset = dataset.drop(test_dataset.index)
 
     # NOTE: We assume that a column contains spectral data IFF the column name is a float,
     # and that this column name is a wavelength in nm.

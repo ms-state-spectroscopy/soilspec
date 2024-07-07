@@ -27,77 +27,64 @@ from lightning.pytorch.utilities import CombinedLoader
 from lightning.pytorch.tuner import Tuner
 
 
-class MultiTaskNetwork(nn.Module):
+# define the LightningModule
+class LitMlp(L.LightningModule):
     def __init__(
         self,
         labels: list,
+        lr=1e-4,
         input_dim: int = None,
-        l1: int = 200,
-        l2: int = 200,
+        hidden_size: int = 200,
         output_dim: int = 1,
+        datasets=None,
     ):
-        super(MultiTaskNetwork, self).__init__()
+        super().__init__()
+        torch.set_float32_matmul_precision("medium")
+        self.lr = lr
+
+        self.datasets = datasets
+
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.labels: list[str] = labels
-        self.task_idx = 0
 
         self.hidden = nn.Sequential(
-            (nn.Linear(input_dim, l1) if input_dim is not None else nn.LazyLinear(l1)),
+            (
+                nn.Linear(input_dim, hidden_size)
+                if input_dim is not None
+                else nn.LazyLinear(hidden_size)
+            ),
             nn.ReLU(),
-            nn.Linear(l1, l2),
-            nn.ReLU(),
+            # nn.Linear(l1, l2),
+            # nn.ReLU(),
         )
 
-        self.heads = nn.ModuleList([nn.Linear(l2, output_dim) for _ in labels])
+        self.heads = nn.ModuleList([nn.Linear(hidden_size, output_dim) for _ in labels])
 
-    def getTaskLabel(self):
-        return self.labels[self.task_idx]
+    def train_dataloader(self):
 
-    def setTask(self, label: str):
-        self.task_idx = self.labels.index(label)
+        train_loaders = {}
+        for label in self.labels:
+            dataset = self.datasets[label]["train"]
+            # use 20% of training data for validation
+            train_set_size = int(len(dataset) * 0.8)
+            seed = torch.Generator().manual_seed(42)
+            # train_set, val_set = torch.utils.data.random_split(
+            #     dataset, [train_set_size, valid_set_size], generator=seed
+            # )
 
-    def switchToNextTask(self):
-        self.task_idx += 1
-        self.task_idx %= len(self.labels)
-        print(f"Switching to {self.labels[self.task_idx]}")
+            train_loaders[label] = data_utils.DataLoader(
+                dataset, batch_size=10, shuffle=True, num_workers=19
+            )
 
-    def forward(self, x: torch.Tensor, task_label: str):
+        combined_train_loader = CombinedLoader(train_loaders, mode="max_size_cycle")
 
-        self.setTask(task_label)
+        return combined_train_loader
 
-        x = self.hidden(x)
-
-        # print(f"Switching to task {self.getTaskLabel()}")
-        x = self.heads[self.task_idx](x)
-
-        return x
-
-
-# define the LightningModule
-class LitMlp(L.LightningModule):
-    def __init__(self, model: MultiTaskNetwork, lr=1e-4):
-        super().__init__()
-        torch.set_float32_matmul_precision("medium")
-        self.model = model
-        self.lr = lr
-
-    # def train_dataloader(self):
-    #     train_loaders = {}
-    #     for label in self.labels:
-    #         dataset = self.datasets[label]["train"]
-    #         # use 20% of training data for validation
-    #         train_set_size = int(len(dataset) * 0.8)
-    #         seed = torch.Generator().manual_seed(42)
-    #         train_set, val_set = torch.utils.data.random_split(
-    #             dataset, [train_set_size, valid_set_size], generator=seed
-    #         )
-
-    #         train_loaders[label] = data_utils.DataLoader(
-    #             train_set, batch_size=10, shuffle=True, num_workers=19
-    #         )
-
-    #     combined_train_loader = CombinedLoader(train_loaders, mode="max_size_cycle")
+    def predict_step(self, batch, batch_idx):
+        for label, (x, y) in batch.items():
+            print(f"{label}: {x.shape}, {y.shape}")
+        # return pred
 
     def training_step(self, batch, batch_idx):
 
@@ -105,7 +92,11 @@ class LitMlp(L.LightningModule):
         for label, (x, y) in batch.items():
             # print(label, x, y)
             x = x.view(x.size(0), -1)
-            y_pred = self.model(x, label)
+            x = self.hidden(x)
+
+            task_idx = self.labels.index(label)
+            y_pred = self.heads[task_idx](x)
+
             losses.append(nn.functional.mse_loss(y_pred, y).reshape(1))
 
         # print(losses)
@@ -119,11 +110,15 @@ class LitMlp(L.LightningModule):
         for label, (x, y) in batch.items():
             # print(label, x, y)
             x = x.view(x.size(0), -1)
-            y_pred = self.model(x, label)
-            test_loss = nn.functional.mse_loss(y_pred, y)
-            self.log(f"test_loss_{self.model.getTaskLabel()}", test_loss)
+            x = self.hidden(x)
 
-    def validation_step(self, batch, batch_idx):
+            task_idx = self.labels.index(label)
+            y_pred = self.heads[task_idx](x)
+
+            test_loss = nn.functional.mse_loss(y_pred, y)
+            self.log(f"test_loss_{label}", test_loss)
+
+    def validation_step(self, batch, batch_idx, dataloader_idx=0):
         # this is the validation loop
         # print(batch)
 
@@ -133,9 +128,13 @@ class LitMlp(L.LightningModule):
         for label, (x, y) in batch.items():
             # print(label, x, y)
             x = x.view(x.size(0), -1)
-            y_pred = self.model(x, label)
+            x = self.hidden(x)
+
+            task_idx = self.labels.index(label)
+            y_pred = self.heads[task_idx](x)
+
             val_loss = nn.functional.mse_loss(y_pred, y)
-            val_losses[self.model.getTaskLabel()] = val_loss
+            val_losses[label] = val_loss
             val_losses_list.append(val_loss.reshape(1))
             # self.log()
 
@@ -149,8 +148,14 @@ class LitMlp(L.LightningModule):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
 
-    # def on_train_epoch_end(self):
-    #     self.model.switchToNextTask()
+    def forward(self, x, label) -> torch.Tensor:
+        x = x.view(x.size(0), -1)
+        x = self.hidden(x)
+
+        task_idx = self.labels.index(label)
+        y_pred = self.heads[task_idx](x)
+
+        return y_pred
 
 
 class LightningMlpAnalyzer(Analyzer):
@@ -163,6 +168,7 @@ class LightningMlpAnalyzer(Analyzer):
         hidden_size=200,
         activation="relu",
         n_logits=3,
+        batch_size: int = 100,
         input_size=None,
         checkpoint_path=None,
         max_train_epochs: int = 1000,
@@ -175,34 +181,36 @@ class LightningMlpAnalyzer(Analyzer):
         self.activation = activation
         self.lr = lr
         self.hidden_size = hidden_size
+        self.batch_size = batch_size
 
-        self.model = MultiTaskNetwork(labels, input_size, hidden_size)
-
-        self.lit_model = LitMlp(self.model)
+        self.lit_model = LitMlp(
+            labels,
+            input_dim=1051,
+            hidden_size=hidden_size,
+            lr=lr,
+            datasets=self.datasets,
+        )
 
         if checkpoint_path is not None:
             print(f"Loading checkpoint from {checkpoint_path}")
             self.lit_model = LitMlp.load_from_checkpoint(
-                checkpoint_path=checkpoint_path, model=self.model
+                checkpoint_path=checkpoint_path, labels=self.labels
             )
 
         self.trainer = L.Trainer(
             accelerator="gpu",
-            limit_val_batches=100,
+            # limit_val_batches=100,
             max_epochs=max_train_epochs,
             callbacks=[
                 EarlyStopping(monitor="val_loss", mode="min", patience=3),
                 DeviceStatsMonitor(),
-                StochasticWeightAveraging(swa_lrs=1e-2),
+                # StochasticWeightAveraging(swa_lrs=1e-2),
             ],
-            accumulate_grad_batches=7,
-            gradient_clip_val=0.5,
+            # accumulate_grad_batches=7,
+            # gradient_clip_val=0.5,
             log_every_n_steps=20,
             # profiler="simple",
         )
-
-        # self.tuner = Tuner(self.trainer)
-        # self.tuner.scale_batch_size(self.model, mode="power")
 
     def train(self):
         train_loaders = {}
@@ -218,10 +226,10 @@ class LightningMlpAnalyzer(Analyzer):
             )
 
             train_loaders[label] = data_utils.DataLoader(
-                train_set, batch_size=1000, shuffle=True, num_workers=19
+                train_set, batch_size=self.batch_size, shuffle=True, num_workers=19
             )
             val_loaders[label] = data_utils.DataLoader(
-                val_set, batch_size=1000, num_workers=19
+                val_set, batch_size=self.batch_size, num_workers=19
             )
 
         combined_train_loader = CombinedLoader(train_loaders, mode="max_size_cycle")
@@ -236,35 +244,28 @@ class LightningMlpAnalyzer(Analyzer):
         self.trainer.fit(self.lit_model, combined_train_loader, combined_val_loader)
 
     def hypertune(self):
-        train_loaders = {}
-        val_loaders = {}
-        for label in self.labels:
-            dataset = self.datasets[label]["train"]
-            # use 20% of training data for validation
-            train_set_size = int(len(dataset) * 0.8)
-            valid_set_size = len(dataset) - train_set_size
-            seed = torch.Generator().manual_seed(42)
-            train_set, val_set = torch.utils.data.random_split(
-                dataset, [train_set_size, valid_set_size], generator=seed
-            )
+        # Create a Tuner
+        tuner = Tuner(self.trainer)
 
-            train_loaders[label] = data_utils.DataLoader(
-                train_set, batch_size=10, shuffle=True, num_workers=19
-            )
-            val_loaders[label] = data_utils.DataLoader(
-                val_set, batch_size=10, num_workers=19
-            )
+        # finds learning rate automatically
+        # sets hparams.lr or hparams.learning_rate to that learning rate
+        lr_finder = tuner.lr_find(self.lit_model, early_stop_threshold=None)
 
-        combined_train_loader = CombinedLoader(train_loaders)
-        combined_val_loader = CombinedLoader(val_loaders)
-        iter(combined_train_loader)
-        iter(combined_val_loader)
-        print("TRAIN SET")
-        print(len(combined_train_loader))
-        print("VAL SET")
-        print(len(combined_val_loader))
+        # Plot with
+        fig = lr_finder.plot(suggest=True)
+        fig.show()
+        fig.savefig("lrs.png")
 
-        self.trainer.fit(self.lit_model, combined_train_loader, combined_val_loader)
+        # Pick point based on plot, or get suggestion
+        new_lr = lr_finder.suggestion()
+
+        print(f"May we suggest: {new_lr}")
+
+        # # update hparams of the model
+        # self.lit_model.hparams.lr = new_lr
+
+        # # Fit model
+        # self.trainer.fit(self.lit_model)
 
     def test(self):
         test_loaders = {}
@@ -289,5 +290,5 @@ class LightningMlpAnalyzer(Analyzer):
 
         self.trainer.test(self.lit_model, combined_test_loader)
 
-    def predict(self, X: pd.DataFrame):
-        return self.model.predict(X)
+    def predict(self, X: pd.DataFrame, label: str):
+        return self.lit_model.forward(X, label)

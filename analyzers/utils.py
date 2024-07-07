@@ -7,9 +7,11 @@ from matplotlib.axes import Axes
 from tensorflow import keras
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
+import lightning as L
+import random
 
 
-def describeAccuracy(Y_true: pd.DataFrame, Y_pred: pd.DataFrame):
+def describeAccuracy(Y_true: pd.DataFrame, Y_pred: pd.DataFrame, silent: bool = False):
     errors = pd.DataFrame(
         data=np.abs(Y_pred.values - Y_true.values), columns=list(Y_true)
     )
@@ -26,14 +28,23 @@ def describeAccuracy(Y_true: pd.DataFrame, Y_pred: pd.DataFrame):
 
     errors_no_outliers = errors[(np.abs(zscore(errors)) < 3).all(axis=1)]
 
+    Y_true_no_outliers = pd.DataFrame(
+        Y_true.values[(np.abs(zscore(errors)) < 3).all(axis=1)], columns=Y_true.columns
+    )
+    Y_pred_no_outliers = pd.DataFrame(
+        Y_pred.values[(np.abs(zscore(errors)) < 3).all(axis=1)], columns=Y_pred.columns
+    )
+
     sns.histplot(data=errors_no_outliers, x=list(Y_true)[0], bins=25, ax=axs[1])
     axs[1].set_title("Absolute errors, no outliers")
 
     print(Y_true.tail())
     print(Y_pred.tail())
 
-    pred_vs_true_df = Y_true.reset_index(drop=True).join(
-        Y_pred.reset_index(drop=True), rsuffix="_pred", how="outer"
+    pred_vs_true_df = Y_true_no_outliers.reset_index(drop=True).join(
+        Y_pred_no_outliers.reset_index(drop=True),
+        rsuffix="_pred",
+        how="outer",
     )
     # pred_vs_true_df = pred_vs_true_df.join(errors, rsuffix="_err")
     print(pred_vs_true_df.isna().sum())
@@ -70,18 +81,25 @@ def describeAccuracy(Y_true: pd.DataFrame, Y_pred: pd.DataFrame):
     g.plot(lims, lims, "-r")
     plt.legend(list(Y_true))
 
-    plt.show()
+    if not silent:
+        plt.show()
 
     # Calculate R2
 
     feature_names = list(Y_true)
+    r2s = []
+
     for i in range(0, Y_true.shape[1]):
         metric = keras.metrics.R2Score()
         metric.update_state(
-            Y_true.values[:, i].reshape((-1, 1)), Y_pred.values[:, i].reshape((-1, 1))
+            Y_true_no_outliers.values[:, i].reshape((-1, 1)),
+            Y_pred_no_outliers.values[:, i].reshape((-1, 1)),
         )
         result = metric.result()
         print(f"R2 for {feature_names[i]}: {result}")
+        r2s.append(result.numpy())
+
+    return r2s[0]  # return the final R2 value
 
 
 def describeAccuracies(
@@ -195,7 +213,43 @@ def plotLoss(history):
     plt.show()
 
 
-def plotSpectraFromSet(df: pd.DataFrame, n=1):
+def augmentSpectra(
+    X: pd.DataFrame, Y: pd.DataFrame, reps: int, noise_std=1e-3, scale=1.2, plot=False
+):
+
+    augmented_Xs = []
+    augmented_Ys = []
+
+    for _ in range(reps):
+        # Scale spectrum by some value between 0.8-1.2
+
+        assert scale >= 1.0 and scale <= 2.0
+        scaling_factor = random.uniform((2 - scale), 1.2)
+
+        noise = np.random.normal(1, noise_std, X.shape)
+
+        augmented_X = X * scaling_factor * noise
+
+        # plotSpectraFromSet(X, indices=0, show=False)
+        if plot:
+            plotSpectraFromSet(augmented_X, indices=0, show=False)
+        augmented_Xs.append(augmented_X)
+        augmented_Ys.append(Y)
+
+    X = pd.DataFrame(
+        np.asarray(augmented_Xs).reshape((-1, X.shape[1])), columns=X.columns
+    )
+    Y = pd.DataFrame(
+        np.asarray(augmented_Ys).reshape((-1, Y.shape[1])), columns=Y.columns
+    )
+
+    if plot:
+        plotSpectraFromSet(X, indices=0, show=True)
+
+    return X, Y
+
+
+def plotSpectraFromSet(df: pd.DataFrame, n=1, indices=None, show=True):
     """
     Plot spectra from a dataframe.
     NOTE: We assume that a column contains spectral data IFF the column name is a float,
@@ -209,25 +263,52 @@ def plotSpectraFromSet(df: pd.DataFrame, n=1):
     rng = np.random.default_rng()
 
     # choose n spectra at random
-    indices = rng.integers(0, df.shape[0], n)
+    if indices is None:
+        indices = rng.integers(0, df.shape[0], n)
 
     spectra_column_names = []
+    wavelengths = []
 
     for col_name in list(df):
         try:
-            float(col_name)
+            col_name: str
+
+            # For compatibility with the OSSL dataset,
+            # where column names end with "_ref"
+            if col_name.endswith("_ref"):
+                wavelength = col_name.rsplit("_", 1)[0]
+                wavelength = wavelength.split(".")[-1]
+            else:
+                wavelength = col_name
+
+            # Attempt to convert the column name to a float.
+            # If this works, then our column must represent a wavelength.
+            wavelength = float(wavelength)
         except ValueError:
+            # Otherwise, move on to the next column.
+            print(f"{col_name} is not a wavelength.")
             continue
         spectra_column_names.append(col_name)
+        wavelengths.append(wavelength)
 
     # NOTE: We assume that a column contains spectral data IFF the column name is a float,
     # and that this column name is a wavelength in nm.
     spectra = df.loc[:, spectra_column_names]
-    X = np.array(spectra_column_names).astype(float)
+    X = np.array(wavelengths).astype(float)
 
     plt.plot(X, spectra.iloc[indices].T)
-    plt.ylim([0, 100])
-    plt.show()
+    plt.xlabel("Wavelength (nm)")
+    plt.ylabel("Reflectance (fraction)")
+    plt.title(f"Reflectance curves for {n} randomly sampled spectra")
+    # plt.ylim([0, 100])
+
+    if show:
+        plt.show()
+
+
+def seedEverything():
+    """Seeds pseudorandomness in PyTorch, Numpy, and Python's `random` module."""
+    L.seed_everything(64)
 
 
 class CustomDataset(Dataset):
