@@ -65,36 +65,118 @@ class LitPiMlp(L.LightningModule):
         y_pred = self.head(x)
         return y_pred
 
+    def augment(
+        self, x, vertical_scale: float = 0.2, noise_scale: float = 0.01, seed: int = 64
+    ):
+        rng = torch.Generator(device="cuda")
+        rng.manual_seed(seed)
+        x_ = x + (x * torch.rand((1), generator=rng, device="cuda") * vertical_scale)
+
+        # print(f"{x} -> {x_}")
+        return x_
+
     def training_step(self, batch, batch_idx):
 
         x, y = batch
 
-        y_pred = self.forward(x)
+        # unsupervised weight ramp-up function
+        T = self.current_epoch
+        w = max(0.1 * T, 1.0)
 
-        loss = nn.functional.mse_loss(y_pred, y)
+        # print(x.numpy(force=True))
+
+        y_pred = self.forward(x)
+        y1 = self.forward(self.augment(x, seed=64))
+        y2 = self.forward(self.augment(x, seed=65))
+
+        # print(f"{y1}, {y2}")
+
+        unsupervised_loss = nn.functional.mse_loss(y1, y2)
+
+        # unsupervised loss
+
+        # Detect if labeled
+        if torch.isnan(y) == torch.tensor(True):
+            # print("y is nan!")
+            supervised_loss = 0
+        else:
+            # print(y)
+            # print(type(y))
+            supervised_loss = nn.functional.mse_loss(y_pred, y)
+
+        loss = supervised_loss + w * unsupervised_loss
+        # print(f"{supervised_loss:.2f} + {unsupervised_loss:.2f} = {loss:.2f}")
 
         self.log(f"train_loss", loss)
         return loss
 
     def test_step(self, batch, batch_idx):
-
         x, y = batch
 
-        y_pred = self.forward(x)
+        # unsupervised weight ramp-up function
+        T = self.current_epoch
+        w = max(0.1 * T, 1.0)
 
-        loss = nn.functional.mse_loss(y_pred, y)
+        # print(x.numpy(force=True))
+
+        y_pred = self.forward(x)
+        y1 = self.forward(self.augment(x, seed=64))
+        y2 = self.forward(self.augment(x, seed=65))
+
+        # print(f"{y1}, {y2}")
+
+        unsupervised_loss = nn.functional.mse_loss(y1, y2)
+
+        # unsupervised loss
+
+        # Detect if labeled
+        if torch.isnan(y) == torch.tensor(True):
+            # print("y is nan!")
+            supervised_loss = 0
+        else:
+            # print(y)
+            # print(type(y))
+            supervised_loss = nn.functional.mse_loss(y_pred, y)
+
+        loss = supervised_loss + w * unsupervised_loss
+        # print(f"{supervised_loss:.2f} + {unsupervised_loss:.2f} = {loss:.2f}")
 
         self.log(f"test_loss", loss)
         return loss
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
+
         x, y = batch
 
+        # unsupervised weight ramp-up function
+        T = self.current_epoch
+        w = max(0.1 * T, 1.0)
+
+        # print(x.numpy(force=True))
+
         y_pred = self.forward(x)
+        y1 = self.forward(self.augment(x, seed=64))
+        y2 = self.forward(self.augment(x, seed=65))
 
-        loss = nn.functional.mse_loss(y_pred, y).reshape(1)
+        # print(f"{y1}, {y2}")
 
-        self.log(f"val_loss", loss)
+        unsupervised_loss = nn.functional.mse_loss(y1, y2)
+
+        # unsupervised loss
+
+        # Detect if labeled
+        if torch.isnan(y) == torch.tensor(True):
+            # print("y is nan!")
+            supervised_loss = 0
+        else:
+            # print(y)
+            # print(type(y))
+            supervised_loss = nn.functional.mse_loss(y_pred, y)
+
+        loss = supervised_loss + w * unsupervised_loss
+        # print(f"{supervised_loss:.2f} + {unsupervised_loss:.2f} = {loss:.2f}")
+
+        self.log(f"val_loss", loss, prog_bar=True)
         return loss
 
     def configure_optimizers(self):

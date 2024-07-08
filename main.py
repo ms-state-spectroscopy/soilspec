@@ -81,14 +81,13 @@ if __name__ == "__main__":
         from_pkl=False,
         include_unlabeled=True,
         train_split=125 / 225,
+        include_depth=False,
     )
 
     print(f"Y_train has {len(Y_train)-Y_train.isna().sum().sum()} non-null values")
     print(
         f"Y_test has {len(Y_test)-Y_test.isna().sum().sum()} non-null values, {len(Y_test)} total values"
     )
-
-    exit()
 
     # X_train, Y_train = utils.augmentSpectra(X_train, Y_train, reps=50)
     # X_test, Y_test = utils.augmentSpectra(X_test, Y_test, reps=50)
@@ -124,9 +123,9 @@ if __name__ == "__main__":
     #     )
 
     analyzer = PiMlpAnalyzer(
-        output_size=len(ossl_labels),
-        batch_size=8,
-        max_train_epochs=500,
+        output_size=len(mississippi_labels),
+        batch_size=1,
+        max_train_epochs=1000,
         input_size=X_train.shape[1],
         lr=1e-4,
         checkpoint_path=args.load_analyzer,
