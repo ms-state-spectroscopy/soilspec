@@ -68,11 +68,6 @@ def load(
         # Drop NaNs for labels
         original_len = len(dataset)
 
-        if include_unlabeled:
-            labeled_dataset = dataset.dropna(axis="index", subset=labels)
-        else:
-            dataset = dataset.dropna(axis="index", subset=labels)
-
         print(f"Dataset length went from {original_len} to {len(dataset)}")
 
         # if include_ec:
@@ -108,6 +103,11 @@ def load(
 
         # Normalize
         dataset.loc[:, labels] = (Y - Y.mean()) / Y.std()
+
+        if include_unlabeled:
+            labeled_dataset = dataset.dropna(axis="index", subset=labels)
+        else:
+            dataset = dataset.dropna(axis="index", subset=labels)
 
     # Split into train and test
 

@@ -107,7 +107,7 @@ class LitPiMlp(L.LightningModule):
         loss = supervised_loss + w * unsupervised_loss
         # print(f"{supervised_loss:.2f} + {unsupervised_loss:.2f} = {loss:.2f}")
 
-        self.log(f"train_loss", loss)
+        self.log(f"train_loss", loss, prog_bar=True)
         return loss
 
     def test_step(self, batch, batch_idx):

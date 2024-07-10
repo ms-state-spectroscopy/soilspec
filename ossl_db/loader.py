@@ -23,6 +23,7 @@ def load(
     train_split=0.75,
     normalize_Y=False,
     from_pkl=False,
+    include_unlabeled=True,
 ) -> tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]:
     """Load the averaged NIR samples from the Neospectra dataset
 
@@ -117,16 +118,24 @@ def load(
 
     # Save for unnormalization later
     if normalize_Y:
+        Y = dataset.loc[:, labels]
+        original_label_std = Y.std()
+        original_label_mean = Y.mean()
+
         # Normalize
-        dataset.loc[:, labels] -= Y.min()
-        dataset.loc[:, labels] /= Y.max()
+        dataset.loc[:, labels] = (Y - Y.mean()) / Y.std()
 
-    # Drop NaNs for labels
-    # dataset.dropna(axis="index", subset=labels, inplace=True)
+        if include_unlabeled:
+            labeled_dataset = dataset.dropna(axis="index", subset=labels)
+        else:
+            dataset = dataset.dropna(axis="index", subset=labels)
 
-    # # Split into train and test
-    train_dataset = dataset.sample(frac=train_split, random_state=0)
-    test_dataset = dataset.drop(train_dataset.index)
+    # If we're including unlabeled data, we only want labeled data in the test set
+    if include_unlabeled:
+        test_dataset = labeled_dataset.sample(frac=1 - train_split, random_state=64)
+    else:
+        test_dataset = dataset.sample(frac=1 - train_split, random_state=64)
+    train_dataset = dataset.drop(test_dataset.index)
 
     # NOTE: We assume that a column contains spectral data IFF the column name is a float,
     # and that this column name is a wavelength in nm.

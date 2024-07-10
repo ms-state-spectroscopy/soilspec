@@ -4,11 +4,19 @@ import pandas as pd
 from scipy.stats import zscore
 import seaborn as sns
 from matplotlib.axes import Axes
-from tensorflow import keras
+from torchmetrics.regression import R2Score
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 import lightning as L
 import random
+from sklearn.metrics import r2_score
+
+
+def rsquared(true, predicted):
+    """Return R^2 where x and y are array-like."""
+
+    r2 = r2_score(true, predicted)
+    return r2
 
 
 def describeAccuracy(Y_true: pd.DataFrame, Y_pred: pd.DataFrame, silent: bool = False):
@@ -90,12 +98,12 @@ def describeAccuracy(Y_true: pd.DataFrame, Y_pred: pd.DataFrame, silent: bool = 
     r2s = []
 
     for i in range(0, Y_true.shape[1]):
-        metric = keras.metrics.R2Score()
-        metric.update_state(
+        # https://lightning.ai/docs/torchmetrics/stable/regression/r2_score.html
+        metric = R2Score()
+        result = metric(
             Y_true_no_outliers.values[:, i].reshape((-1, 1)),
             Y_pred_no_outliers.values[:, i].reshape((-1, 1)),
         )
-        result = metric.result()
         print(f"R2 for {feature_names[i]}: {result}")
         r2s.append(result.numpy())
 
@@ -138,11 +146,8 @@ def describeAccuracies(
             columns=list(Y_true) + ["mean_error"],
         )
 
-        metric = keras.metrics.R2Score()
-        metric.update_state(
-            Y_true.values.reshape((-1, 1)), Y_pred.values.reshape((-1, 1))
-        )
-        r2 = metric.result()
+        metric = R2Score()
+        r2 = metric(Y_true.values.reshape((-1, 1)), Y_pred.values.reshape((-1, 1)))
 
         print("=== Absolute Errors ===")
         print(errors.describe())

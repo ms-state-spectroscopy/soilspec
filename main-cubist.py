@@ -24,6 +24,7 @@ import analyzers.utils as utils
 from analyzers.lightning_mlp import LightningMlpAnalyzer
 from analyzers.lightning_plain_mlp import LightningPlainMlpAnalyzer
 from analyzers.temporal_ensemble import TemporalEnsembleAnalyzer
+from analyzers.cubist import CubistAnalyzer
 from analyzers.pi_mlp import PiMlpAnalyzer
 from tqdm import tqdm
 import torch
@@ -34,6 +35,7 @@ from matplotlib import pyplot as plt
 
 # Import seaborn
 import seaborn as sns
+from time import time
 
 # Apply the default theme
 sns.set_theme(style="ticks", palette="pastel")
@@ -80,7 +82,7 @@ if __name__ == "__main__":
         labels=mississippi_labels,
         normalize_Y=True,
         from_pkl=False,
-        include_unlabeled=True,
+        include_unlabeled=False,
         train_split=125 / 225,
         include_depth=False,
     )
@@ -91,7 +93,7 @@ if __name__ == "__main__":
     #     original_label_mean,
     #     original_label_std,
     # ) = ossl_db.loader.load(
-    #     labels=ossl_labels, normalize_Y=True, from_pkl=True, include_unlabeled=True
+    #     labels=ossl_labels, normalize_Y=True, from_pkl=True, include_unlabeled=False
     # )
 
     print(
@@ -100,6 +102,14 @@ if __name__ == "__main__":
     print(
         f"Y_test has {len(Y_test)-Y_test.isna().sum().sum()} non-null values, {len(Y_test)} total values"
     )
+
+    # TRIM VALUES TO FIRST N SAMPLES
+    # n = 10000
+    # X_train = X_train.iloc[:n, :]
+    # Y_train = Y_train.iloc[:n, :]
+
+    # X_test = X_test.iloc[:n, :]
+    # Y_test = Y_test.iloc[:n, :]
 
     print(Y_train.describe())
     print(Y_test.describe())
@@ -130,39 +140,19 @@ if __name__ == "__main__":
     #         # logdir=time.strftime("%Y_%m_%d-%H_%M"),
     #     )
 
-    analyzer = TemporalEnsembleAnalyzer(
-        output_size=len(mississippi_labels),
-        batch_size=128,
-        max_train_epochs=100,
-        input_size=X_train.shape[1],
-        lr=1e-4,
-        checkpoint_path=args.load_analyzer,
-    )
+    analyzer = CubistAnalyzer(verbose=0)
 
     # 3. Train the Analyzer on the training data.
 
     # analyzer.hypertune()
 
     if not args.skip_training:
+        start = time()
         analyzer.train(X_train, Y_train)
+        print(f"Training took {time()-start:.2f} seconds")
 
     # exit()
 
+    start = time()
     analyzer.test(X_test, Y_test)
-
-    analyzer.resetTrainer()
-
-    # test_dset = utils.CustomDataset(X_test, Y_test)
-    # X_test: pd.DataFrame = test_dset.X
-    # Y_test = test_dset.Y
-
-    # 4. Evaluate the Analyzer using the test set.
-    # Passing `label` automatically loads the correct head
-    # Y_pred = analyzer.predict(
-    #     torch.tensor(X_test.to_numpy(dtype=np.float32), device="cuda")
-    # )
-    # Y_pred = pd.DataFrame(
-    #     data=Y_pred.detach().numpy(), index=X_test.index, columns=Y_test.columns
-    # )
-
-    # utils.describeAccuracy(Y_test, Y_pred)
+    print(f"Testing took {time()-start:.2f} seconds")
