@@ -80,6 +80,7 @@ if __name__ == "__main__":
         include_unlabeled=False,
         train_split=125 / 225,
         include_depth=False,
+        n_components=120,
     )
 
     (
@@ -88,7 +89,11 @@ if __name__ == "__main__":
         original_label_mean,
         original_label_std,
     ) = ossl_db.loader.load(
-        labels=ossl_labels, normalize_Y=True, from_pkl=True, include_unlabeled=True, n_components=120
+        labels=ossl_labels,
+        normalize_Y=True,
+        from_pkl=False,
+        include_unlabeled=True,
+        n_components=120,
     )
 
     print(
@@ -105,7 +110,7 @@ if __name__ == "__main__":
     # X_train, X_test = X_test, X_train
     # Y_train, Y_test = Y_test, Y_train
 
-    # X_train, Y_train = utils.augmentSpectra(X_train, Y_train, reps=500)
+    # X_train, Y_train = utils.augmentSpectra(X_train, Y_train, reps=50)
     # X_test, Y_test = utils.augmentSpectra(X_test, Y_test, reps=50)
 
     # utils.plotSpectraFromSet(X_train, n=30)

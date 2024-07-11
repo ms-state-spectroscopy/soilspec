@@ -219,7 +219,7 @@ def plotLoss(history):
 
 
 def augmentSpectra(
-    X: pd.DataFrame, Y: pd.DataFrame, reps: int, noise_std=1e-3, scale=1.2, plot=False
+    X: pd.DataFrame, Y: pd.DataFrame, reps: int, noise_std=1e-3, scale=1.5, plot=False
 ):
 
     augmented_Xs = []
@@ -241,12 +241,8 @@ def augmentSpectra(
         augmented_Xs.append(augmented_X)
         augmented_Ys.append(Y)
 
-    X_augemented = pd.DataFrame(
-        np.asarray(augmented_Xs).reshape((-1, X.shape[1])), columns=X.columns
-    )
-    Y_augmented = pd.DataFrame(
-        np.asarray(augmented_Ys).reshape((-1, Y.shape[1])), columns=Y.columns
-    )
+    X_augemented = np.asarray(augmented_Xs).reshape((-1, X.shape[1]))
+    Y_augmented = np.asarray(augmented_Ys).reshape((-1, Y.shape[1]))
 
     if plot:
         plotSpectraFromSet(X_augemented, indices=0, show=True)

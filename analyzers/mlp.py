@@ -80,7 +80,7 @@ class LitPlainMlp(L.LightningModule):
         self.current_train_loss = 0.0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.view(x.size(0), -1)
+        # x = x.view(x.size(0), -1)
         y_pred = self.seq(x)
         # y_pred = self.head(x)
         return y_pred
@@ -97,7 +97,7 @@ class LitPlainMlp(L.LightningModule):
 
                 # Augmentation step 1: Vertical scaling
                 scaling_magnitude = 0.2  # TODO: Parameterize this
-                scale = torch.rand(1, device="cuda") * 2 - 1 * scaling_magnitude
+                scale = (torch.rand(1, device="cuda") * 2 - 1) * scaling_magnitude
 
                 noise = torch.randn_like(x) * 1e-3  # TODO: Parameterize this
 
@@ -113,7 +113,7 @@ class LitPlainMlp(L.LightningModule):
 
                 print(f"The {_+1}th loss is {loss.item()}")
                 print(
-                    f"The {_+1}th spectra's max went from {og_max} -> {torch.max(x_)}"
+                    f"The {_+1}th spectra's max went from {og_max.item():.2f} -> {torch.max(x_).item():.2f} after {scale.item():.2f} scale"
                 )
                 losses.append(loss)
 
@@ -122,7 +122,7 @@ class LitPlainMlp(L.LightningModule):
         losses.append(nn.functional.mse_loss(y_pred, y))
 
         loss = torch.mean(torch.stack(losses))
-        print(f"The mean loss is {loss.item()}")
+        # print(f"The mean loss is {loss.item()}")
 
         self.current_train_loss = loss
 
@@ -299,7 +299,7 @@ class MlpAnalyzer(Analyzer):
             train_set, batch_size=self.batch_size, shuffle=True, num_workers=19
         )
         val_loader = data_utils.DataLoader(
-            val_set, batch_size=self.batch_size, num_workers=19
+            val_set, batch_size=valid_set_size, num_workers=19
         )
 
         self.trainer.fit(self.lit_model, train_loader, val_loader)

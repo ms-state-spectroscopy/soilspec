@@ -1,6 +1,5 @@
 import pandas as pd
 from halo import Halo
-from torch.utils.data import Dataset
 from sklearn.decomposition import PCA
 import numpy as np
 
@@ -87,12 +86,13 @@ def load(
         dataset.columns.to_series().to_csv("ossl_db/colum_names.csv")
 
         # Drop NaNs for labels
-        for label in labels:
+        if not include_unlabeled:
+            for label in labels:
 
-            print(dataset.loc[:, label])
-            dataset.dropna(axis="index", subset=[label], inplace=True)
+                print(dataset.loc[:, label])
+                dataset.dropna(axis="index", subset=[label], inplace=True)
 
-            print(f"DATASET HAS {len(dataset)} SAMPLES after dropping {label}")
+                print(f"DATASET HAS {len(dataset)} SAMPLES after dropping {label}")
 
         non_nans = len(dataset) - dataset.isna().sum()
         non_nans.to_csv("ossl_db/non-nan_counts.csv")

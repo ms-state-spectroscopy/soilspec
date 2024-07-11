@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from halo import Halo
+from sklearn.decomposition import PCA
 
 
 SPECTRUM_START_COLUMN = 16
@@ -26,6 +27,7 @@ def load(
     match_ossl_spectra=True,
     from_pkl=False,
     include_unlabeled=False,
+    n_components=None,
 ) -> tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]:
     """Load the averaged NIR samples from the Neospectra dataset
 
@@ -122,6 +124,13 @@ def load(
     # and that this column name is a wavelength in nm.
     X_train = train_dataset.loc[:, spectra_column_names]
     X_test = test_dataset.loc[:, spectra_column_names]
+
+    if n_components is not None:
+        pca = PCA(n_components=n_components)
+        pca.fit(np.vstack((X_train.values, X_test.values)))
+
+        X_train = pca.transform(X_train)
+        X_test = pca.transform(X_test)
 
     if include_depth:
 
