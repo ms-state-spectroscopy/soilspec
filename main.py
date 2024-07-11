@@ -16,15 +16,12 @@ import pandas as pd
 import mississippi_db
 import mississippi_db.loader
 import ossl_db.loader
-import neospectra
-import pickle
+
+# import neospectra
+# import pickle
 import analyzers.utils as utils
 
-# from analyzers.mlp import MlpAnalyzer
-from analyzers.lightning_mlp import LightningMlpAnalyzer
 from analyzers.mlp import MlpAnalyzer
-from analyzers.temporal_ensemble import TemporalEnsembleAnalyzer
-from analyzers.pi_mlp import PiMlpAnalyzer
 from tqdm import tqdm
 import torch
 import time
@@ -85,14 +82,14 @@ if __name__ == "__main__":
         include_depth=False,
     )
 
-    # (
-    #     (X_train, Y_train),
-    #     (X_test, Y_test),
-    #     original_label_mean,
-    #     original_label_std,
-    # ) = ossl_db.loader.load(
-    #     labels=ossl_labels, normalize_Y=True, from_pkl=True, include_unlabeled=True
-    # )
+    (
+        (X_train, Y_train),
+        (X_test, Y_test),
+        original_label_mean,
+        original_label_std,
+    ) = ossl_db.loader.load(
+        labels=ossl_labels, normalize_Y=True, from_pkl=True, include_unlabeled=True, n_components=120
+    )
 
     print(
         f"Y_train has {len(Y_train)-Y_train.isna().sum().sum()} non-null values ({(len(Y_train)-Y_train.isna().sum().sum())/len(Y_train)*100})"
@@ -112,7 +109,6 @@ if __name__ == "__main__":
     # X_test, Y_test = utils.augmentSpectra(X_test, Y_test, reps=50)
 
     # utils.plotSpectraFromSet(X_train, n=30)
-
 
     analyzer = MlpAnalyzer(
         output_size=1,

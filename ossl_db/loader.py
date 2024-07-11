@@ -1,6 +1,9 @@
 import pandas as pd
 from halo import Halo
 from torch.utils.data import Dataset
+from sklearn.decomposition import PCA
+import numpy as np
+
 
 SPECTRUM_START_COLUMN = 16
 
@@ -24,6 +27,7 @@ def load(
     normalize_Y=False,
     from_pkl=False,
     include_unlabeled=True,
+    n_components=None,
 ) -> tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]:
     """Load the averaged NIR samples from the Neospectra dataset
 
@@ -142,6 +146,12 @@ def load(
     X_train = train_dataset.loc[:, spectra_column_names]
     X_test = test_dataset.loc[:, spectra_column_names]
 
+    if n_components is not None:
+        pca = PCA(n_components=n_components)
+        pca.fit(np.vstack((X_train.values, X_test.values)))
+
+        X_train = pca.transform(X_train)
+        X_test = pca.transform(X_test)
     # if include_depth:
 
     #     X_train = X_train.join(

@@ -318,15 +318,22 @@ def seedEverything():
 
 class CustomDataset(Dataset):
     def __init__(self, X, Y):
+
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+
+        if isinstance(Y, pd.DataFrame):
+            Y = Y.values
+
         self.X: pd.DataFrame = X
         self.Y: pd.DataFrame = Y
 
-        assert isinstance(Y, pd.DataFrame)
+        assert isinstance(Y, np.ndarray)
 
     def __getitem__(self, index):
         # row = self.dataframe.iloc[index].to_numpy()
-        features = self.X.iloc[index, :].to_numpy().astype(np.float32)
-        label = self.Y.iloc[index, :].to_numpy().astype(np.float32)
+        features = self.X[index, :].astype(np.float32)
+        label = self.Y[index, :].astype(np.float32)
         return features, label
 
     def __len__(self):

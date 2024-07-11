@@ -52,6 +52,16 @@ class LitPlainMlp(L.LightningModule):
 
         self.datasets = datasets
 
+        self.seq = nn.Sequential(
+            nn.Linear(input_dim, hidden_size),
+            nn.LeakyReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(hidden_size, hidden_size),
+            nn.LeakyReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(hidden_size, output_dim),
+        )
+
         # Model layers
         self.l1 = (
             nn.Linear(input_dim, hidden_size)
@@ -67,15 +77,12 @@ class LitPlainMlp(L.LightningModule):
         self.head = nn.Linear(hidden_size, output_dim)
 
         self.n_augmentations = n_augmentations
+        self.current_train_loss = 0.0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.view(x.size(0), -1)
-        x = self.l1(x)
-        x = self.relu1(x)
-        x = self.l2(x)
-        x = self.relu2(x)
-        x = self.dropout(x)
-        y_pred = self.head(x)
+        y_pred = self.seq(x)
+        # y_pred = self.head(x)
         return y_pred
 
     def training_step(self, batch, batch_idx):
@@ -116,6 +123,8 @@ class LitPlainMlp(L.LightningModule):
 
         loss = torch.mean(torch.stack(losses))
         print(f"The mean loss is {loss.item()}")
+
+        self.current_train_loss = loss
 
         self.log(f"train_loss", loss)
         return loss
@@ -173,7 +182,12 @@ class LitPlainMlp(L.LightningModule):
 
         loss = nn.functional.mse_loss(y_pred, y).reshape(1)
 
-        self.log(f"val_loss", loss)
+        tensorboard = self.logger.experiment
+        tensorboard.add_scalars(
+            "loss",
+            {"val": loss, "train": self.current_train_loss},
+            global_step=self.current_epoch,
+        )
 
         y_np: np.ndarray = y.numpy(force=True).reshape((-1, 1))
         y_pred_np: np.ndarray = y_pred.numpy(force=True).reshape((-1, 1))
@@ -209,7 +223,7 @@ class LitPlainMlp(L.LightningModule):
 
         tensorboard = self.logger.experiment
         tensorboard.add_figure(
-            "val/real_vs_pred", plt.gcf(), global_step=self.current_epoch
+            "real_vs_pred/val", plt.gcf(), global_step=self.current_epoch
         )
 
         # log the outputs!
@@ -260,7 +274,7 @@ class MlpAnalyzer(Analyzer):
             # limit_val_batches=100,
             max_epochs=max_train_epochs,
             callbacks=[
-                EarlyStopping(monitor="val_loss", mode="min", patience=10),
+                EarlyStopping(monitor="r2/val", mode="max", patience=10),
                 DeviceStatsMonitor(),
                 # StochasticWeightAveraging(swa_lrs=1e-2),
             ],
