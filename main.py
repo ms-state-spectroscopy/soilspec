@@ -22,7 +22,7 @@ import analyzers.utils as utils
 
 # from analyzers.mlp import MlpAnalyzer
 from analyzers.lightning_mlp import LightningMlpAnalyzer
-from analyzers.lightning_plain_mlp import LightningPlainMlpAnalyzer
+from analyzers.mlp import MlpAnalyzer
 from analyzers.temporal_ensemble import TemporalEnsembleAnalyzer
 from analyzers.pi_mlp import PiMlpAnalyzer
 from tqdm import tqdm
@@ -80,7 +80,7 @@ if __name__ == "__main__":
         labels=mississippi_labels,
         normalize_Y=True,
         from_pkl=False,
-        include_unlabeled=True,
+        include_unlabeled=False,
         train_split=125 / 225,
         include_depth=False,
     )
@@ -104,65 +104,26 @@ if __name__ == "__main__":
     print(Y_train.describe())
     print(Y_test.describe())
 
-    # X_train, Y_train = utils.augmentSpectra(X_train, Y_train, reps=50)
+    # Flippity floppity
+    # X_train, X_test = X_test, X_train
+    # Y_train, Y_test = Y_test, Y_train
+
+    # X_train, Y_train = utils.augmentSpectra(X_train, Y_train, reps=500)
     # X_test, Y_test = utils.augmentSpectra(X_test, Y_test, reps=50)
 
     # utils.plotSpectraFromSet(X_train, n=30)
 
-    # 2. Instantiate an Analyzer.
-    # if args.load_analyzer:
-    #     analyzer = LightningMlpAnalyzer(
-    #         checkpoint_path=args.load_analyzer,
-    #         datasets=separate_dsets,
-    #         labels=ossl_labels,
-    #     )
-    # else:
-    #     # 1 logit-- only one feature at a time
-    #     analyzer = LightningMlpAnalyzer(
-    #         datasets=separate_dsets,
-    #         labels=ossl_labels + mississippi_labels,
-    #         n_logits=1,
-    #         hidden_size=200,
-    #         lr=1e-3,
-    #         input_size=X_train.shape[1],
-    #         max_train_epochs=1000,
-    #         batch_size=256,
-    #         # logdir=time.strftime("%Y_%m_%d-%H_%M"),
-    #     )
 
-    analyzer = TemporalEnsembleAnalyzer(
-        output_size=len(mississippi_labels),
-        batch_size=128,
-        max_train_epochs=100,
-        input_size=X_train.shape[1],
+    analyzer = MlpAnalyzer(
+        output_size=1,
         lr=1e-4,
+        hidden_size=200,
+        batch_size=128,
+        input_size=X_train.shape[1],
         checkpoint_path=args.load_analyzer,
+        n_augmentations=0,
     )
-
-    # 3. Train the Analyzer on the training data.
-
-    # analyzer.hypertune()
-
     if not args.skip_training:
         analyzer.train(X_train, Y_train)
 
-    # exit()
-
     analyzer.test(X_test, Y_test)
-
-    analyzer.resetTrainer()
-
-    # test_dset = utils.CustomDataset(X_test, Y_test)
-    # X_test: pd.DataFrame = test_dset.X
-    # Y_test = test_dset.Y
-
-    # 4. Evaluate the Analyzer using the test set.
-    # Passing `label` automatically loads the correct head
-    # Y_pred = analyzer.predict(
-    #     torch.tensor(X_test.to_numpy(dtype=np.float32), device="cuda")
-    # )
-    # Y_pred = pd.DataFrame(
-    #     data=Y_pred.detach().numpy(), index=X_test.index, columns=Y_test.columns
-    # )
-
-    # utils.describeAccuracy(Y_test, Y_pred)

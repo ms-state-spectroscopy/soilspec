@@ -20,7 +20,7 @@ import neospectra
 import pickle
 import analyzers.utils as utils
 from analyzers.mlp import MlpAnalyzer
-from analyzers.lightning_plain_mlp import LightningPlainMlpAnalyzer
+from analyzers.mlp import MlpAnalyzer
 from analyzers.rf import RandomForestAnalyzer
 from tqdm import tqdm
 import numpy as np
@@ -106,7 +106,7 @@ if __name__ == "__main__":
 
     # 2. Instantiate an Analyzer.
     if args.load_analyzer:
-        analyzer = LightningPlainMlpAnalyzer(
+        analyzer = MlpAnalyzer(
             checkpoint_path=args.load_analyzer,
             datasets=separate_dsets,
             labels=physical_indicators,

@@ -241,17 +241,17 @@ def augmentSpectra(
         augmented_Xs.append(augmented_X)
         augmented_Ys.append(Y)
 
-    X = pd.DataFrame(
+    X_augemented = pd.DataFrame(
         np.asarray(augmented_Xs).reshape((-1, X.shape[1])), columns=X.columns
     )
-    Y = pd.DataFrame(
+    Y_augmented = pd.DataFrame(
         np.asarray(augmented_Ys).reshape((-1, Y.shape[1])), columns=Y.columns
     )
 
     if plot:
-        plotSpectraFromSet(X, indices=0, show=True)
+        plotSpectraFromSet(X_augemented, indices=0, show=True)
 
-    return X, Y
+    return X_augemented, Y_augmented
 
 
 def plotSpectraFromSet(df: pd.DataFrame, n=1, indices=None, show=True):

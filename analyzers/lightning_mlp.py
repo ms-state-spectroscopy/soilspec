@@ -2,7 +2,7 @@ from analyzers.analyzer import Analyzer
 import numpy as np
 import pandas as pd
 from analyzers import utils
-from analyzers.utils import CustomDataset
+from analyzers.utils import CustomDataset, rsquared
 
 
 # from sklearn.cross_decomposition import PLSRegression
@@ -25,6 +25,11 @@ from lightning.pytorch.profilers import AdvancedProfiler
 from lightning.pytorch.utilities import CombinedLoader
 
 from lightning.pytorch.tuner import Tuner
+
+import matplotlib
+
+matplotlib.use("Agg")
+from matplotlib import pyplot as plt
 
 
 # define the LightningModule
@@ -119,30 +124,62 @@ class LitMlp(L.LightningModule):
             self.log(f"test_loss_{label}", test_loss)
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
-        # this is the validation loop
-        # print(batch)
-
-        val_losses = {}
-        val_losses_list = []
 
         for label, (x, y) in batch.items():
-            # print(label, x, y)
-            x = x.view(x.size(0), -1)
-            x = self.hidden(x)
 
-            task_idx = self.labels.index(label)
-            y_pred = self.heads[task_idx](x)
+            y_pred = self.forward(x, label)
 
-            val_loss = nn.functional.mse_loss(y_pred, y)
-            val_losses[label] = val_loss
-            val_losses_list.append(val_loss.reshape(1))
-            # self.log()
+            # print(x)
+            # print(y)
+            # print(y_pred)
 
-        tensorboard = self.logger.experiment
-        tensorboard.add_scalars(f"val_loss", val_losses, self.current_epoch)
+            # loss, supervised_loss, unsupervised_loss, nbsup = self.temporal_loss(
+            #     y_pred, zcomp, self.w, y
+            # )
 
-        mean_val_loss = torch.mean(torch.cat(val_losses_list))
-        self.log(f"val_loss", mean_val_loss)
+            # metric = R2Score().cuda()
+
+            y: torch.Tensor
+
+            y_np: np.ndarray = y.numpy(force=True).reshape((-1, 1))
+            y_pred_np: np.ndarray = y_pred.numpy(force=True).reshape((-1, 1))
+
+            # Filter to only include non-nan values
+            y_pred_np = y_pred_np[np.isnan(y_np) == False]
+            y_np = y_np[np.isnan(y_np) == False]
+
+            if np.isnan(y_np).any():
+                print(
+                    f"Labels contain {np.isnan(y_np).sum()} null values ({np.isnan(y_np).sum()/y_np.size*100:.2f}%)!"
+                )
+                print(
+                    f"Labels contain {y_np.size-np.isnan(y_np).sum()} null values ({(y_np.size-np.isnan(y_np).sum())/y_np.size*100:.2f}%)!"
+                )
+                r2 = -1.0
+            elif np.isnan(y_pred_np).any():
+                print(f"Predictions contain {np.isnan(y_pred_np).sum()} null values!")
+                r2 = -1.0
+            else:
+                r2 = rsquared(y_np, y_pred_np)
+
+            # test_pd = pd.DataFrame(
+            #     np.hstack((y_np, y_pred_np)), columns=["y_true", "y_pred"]
+            # )
+            # test_pd.to_csv(f"test_results_{batch_idx}.csv")
+
+            ax = plt.subplot()
+            ax.scatter(y_np, y_pred_np)
+            # ax.xlabel("True")
+            # ax.xlabel("Predicted")
+            ax.plot([-1, 1], [-1, 1])
+
+            tensorboard = self.logger.experiment
+            tensorboard.add_figure(
+                "val/real_vs_pred", plt.gcf(), global_step=self.current_epoch
+            )
+
+            # log the outputs!
+            self.log("val/r2", r2)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)

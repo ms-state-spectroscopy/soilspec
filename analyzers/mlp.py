@@ -1,169 +1,327 @@
 from analyzers.analyzer import Analyzer
 import numpy as np
 import pandas as pd
-from sklearn.cross_decomposition import PLSRegression
-import tensorflow as tf
-from tensorflow import keras
-from keras import callbacks, layers, Model, saving, regularizers
+from analyzers import utils
+from analyzers.utils import CustomDataset
+from scipy.stats import zscore
+
+
+# from sklearn.cross_decomposition import PLSRegression
+# import tensorflow as tf
+# from tensorflow import keras
+# from keras import callbacks, layers, Model, saving, regularizers
 from tqdm import trange, tqdm
+
+from analyzers.utils import rsquared
+import matplotlib
+
+matplotlib.use("Agg")
+from matplotlib import pyplot as plt
+
+import os
+from torch import optim, nn, utils, Tensor
+import torch
+import torch.utils.data as data_utils
+
+# from torchvision.datasets import MNIST
+# from torchvision.transforms import ToTensor
+import lightning as L
+from lightning.pytorch.callbacks import DeviceStatsMonitor, StochasticWeightAveraging
+from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+from lightning.pytorch.profilers import AdvancedProfiler
+from lightning.pytorch.utilities import CombinedLoader
+
+from lightning.pytorch.tuner import Tuner
+
+
+# define the LightningModule
+class LitPlainMlp(L.LightningModule):
+    def __init__(
+        self,
+        lr=1e-4,
+        input_dim: int = None,
+        hidden_size: int = 200,
+        output_dim: int = 1,
+        datasets=None,
+        n_augmentations=0,
+        p=0.5,
+    ):
+        super().__init__()
+        torch.set_float32_matmul_precision("medium")
+        self.lr = lr
+
+        self.datasets = datasets
+
+        # Model layers
+        self.l1 = (
+            nn.Linear(input_dim, hidden_size)
+            if input_dim is not None
+            else nn.LazyLinear(hidden_size)
+        )
+        self.relu1 = nn.ReLU()
+
+        self.l2 = nn.Linear(hidden_size, hidden_size)
+        self.relu2 = nn.ReLU()
+        self.dropout = nn.Dropout(p=p)
+
+        self.head = nn.Linear(hidden_size, output_dim)
+
+        self.n_augmentations = n_augmentations
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.view(x.size(0), -1)
+        x = self.l1(x)
+        x = self.relu1(x)
+        x = self.l2(x)
+        x = self.relu2(x)
+        x = self.dropout(x)
+        y_pred = self.head(x)
+        return y_pred
+
+    def training_step(self, batch, batch_idx):
+
+        x, y = batch
+
+        losses = []
+
+        if self.training:
+            for _ in range(self.n_augmentations):
+                # Augment the spectrum
+
+                # Augmentation step 1: Vertical scaling
+                scaling_magnitude = 0.2  # TODO: Parameterize this
+                scale = torch.rand(1, device="cuda") * 2 - 1 * scaling_magnitude
+
+                noise = torch.randn_like(x) * 1e-3  # TODO: Parameterize this
+
+                x: torch.Tensor
+                x_ = x.clone()
+
+                og_max = torch.max(x_)
+                x_ += x_ * scale
+                x_ += noise
+                y_pred = self.forward(x_)
+
+                loss = nn.functional.mse_loss(y_pred, y)
+
+                print(f"The {_+1}th loss is {loss.item()}")
+                print(
+                    f"The {_+1}th spectra's max went from {og_max} -> {torch.max(x_)}"
+                )
+                losses.append(loss)
+
+        y_pred = self.forward(x)
+
+        losses.append(nn.functional.mse_loss(y_pred, y))
+
+        loss = torch.mean(torch.stack(losses))
+        print(f"The mean loss is {loss.item()}")
+
+        self.log(f"train_loss", loss)
+        return loss
+
+    def test_step(self, batch, batch_idx):
+
+        x, y = batch
+
+        y_pred = self.forward(x)
+
+        loss = nn.functional.mse_loss(y_pred, y)
+
+        self.log(f"test_loss", loss)
+
+        y_np: np.ndarray = y.numpy(force=True).reshape((-1, 1))
+        y_pred_np: np.ndarray = y_pred.numpy(force=True).reshape((-1, 1))
+
+        # Filter to only include non-nan values
+        y_pred_np = y_pred_np[np.isnan(y_np) == False]
+        y_np = y_np[np.isnan(y_np) == False]
+
+        errors = np.abs(y_pred_np - y_np)
+        Y_true_no_outliers = y_np[(np.abs(zscore(errors)) < 3)]
+        Y_pred_no_outliers = y_pred_np[(np.abs(zscore(errors)) < 3)]
+
+        if np.isnan(y_np).any():
+            print(
+                f"Labels contain {np.isnan(y_np).sum()} null values ({np.isnan(y_np).sum()/y_np.size*100:.2f}%)!"
+            )
+            print(
+                f"Labels contain {y_np.size-np.isnan(y_np).sum()} null values ({(y_np.size-np.isnan(y_np).sum())/y_np.size*100:.2f}%)!"
+            )
+            r2 = -1.0
+        elif np.isnan(y_pred_np).any():
+            print(f"Predictions contain {np.isnan(y_pred_np).sum()} null values!")
+            r2 = -1.0
+        else:
+            r2 = rsquared(y_np, y_pred_np)
+
+        ax = plt.subplot()
+        ax.scatter(Y_true_no_outliers, Y_pred_no_outliers)
+        ax.plot([-1, 1], [-1, 1])
+
+        plt.savefig("test_plot.png")
+        plt.show()
+
+        self.log(f"test_r2", r2)
+
+        return loss
+
+    def validation_step(self, batch, batch_idx, dataloader_idx=0):
+        x, y = batch
+
+        y_pred = self.forward(x)
+
+        loss = nn.functional.mse_loss(y_pred, y).reshape(1)
+
+        self.log(f"val_loss", loss)
+
+        y_np: np.ndarray = y.numpy(force=True).reshape((-1, 1))
+        y_pred_np: np.ndarray = y_pred.numpy(force=True).reshape((-1, 1))
+
+        # Filter to only include non-nan values
+        y_pred_np = y_pred_np[np.isnan(y_np) == False]
+        y_np = y_np[np.isnan(y_np) == False]
+
+        if np.isnan(y_np).any():
+            print(
+                f"Labels contain {np.isnan(y_np).sum()} null values ({np.isnan(y_np).sum()/y_np.size*100:.2f}%)!"
+            )
+            print(
+                f"Labels contain {y_np.size-np.isnan(y_np).sum()} null values ({(y_np.size-np.isnan(y_np).sum())/y_np.size*100:.2f}%)!"
+            )
+            r2 = -1.0
+        elif np.isnan(y_pred_np).any():
+            print(f"Predictions contain {np.isnan(y_pred_np).sum()} null values!")
+            r2 = -1.0
+        else:
+            r2 = rsquared(y_np, y_pred_np)
+
+        # test_pd = pd.DataFrame(
+        #     np.hstack((y_np, y_pred_np)), columns=["y_true", "y_pred"]
+        # )
+        # test_pd.to_csv(f"test_results_{batch_idx}.csv")
+
+        ax = plt.subplot()
+        ax.scatter(y_np, y_pred_np)
+        # ax.xlabel("True")
+        # ax.xlabel("Predicted")
+        ax.plot([-1, 1], [-1, 1])
+
+        tensorboard = self.logger.experiment
+        tensorboard.add_figure(
+            "val/real_vs_pred", plt.gcf(), global_step=self.current_epoch
+        )
+
+        # log the outputs!
+        self.log("r2/val", r2, prog_bar=True)
+
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = optim.Adam(self.parameters(), lr=self.lr)
+        return optimizer
 
 
 class MlpAnalyzer(Analyzer):
     def __init__(
         self,
+        output_size,
         verbose: int = 0,
         lr=1e-3,
         hidden_size=200,
-        activation="relu",
-        n_logits=3,
+        batch_size: int = 100,
+        input_size=None,
+        checkpoint_path=None,
+        max_train_epochs: int = 1000,
+        n_augmentations: int = 10,
     ) -> None:
         super().__init__(verbose=verbose)
 
-        self.activation = activation
         self.lr = lr
         self.hidden_size = hidden_size
+        self.batch_size = batch_size
 
-        self.normalizer = tf.keras.layers.Normalization(axis=-1)
-
-        self.model = keras.Sequential(
-            [
-                self.normalizer,
-                layers.Dense(
-                    hidden_size,
-                    activation=activation,
-                    activity_regularizer=regularizers.l2(0.01),
-                ),
-                layers.Dense(
-                    hidden_size,
-                    activation=activation,
-                    activity_regularizer=regularizers.l2(0.01),
-                ),
-                # layers.Dense(
-                #     hidden_size,
-                #     activation=activation,
-                #     activity_regularizer=regularizers.l2(0.01),
-                # ),
-                layers.Dense(n_logits),
-            ]
+        self.lit_model = LitPlainMlp(
+            input_dim=input_size,
+            hidden_size=hidden_size,
+            lr=lr,
+            n_augmentations=n_augmentations,
+            output_dim=output_size,
         )
 
-        self.optimizer = tf.keras.optimizers.Adam(lr)
+        if checkpoint_path is not None:
+            print(f"Loading checkpoint from {checkpoint_path}")
+            self.lit_model = LitPlainMlp.load_from_checkpoint(
+                checkpoint_path=checkpoint_path, output_dim=output_size
+            )
 
-        self.loss_fn = tf.keras.losses.MAE
-
-        self.model.compile(
-            loss="mean_absolute_error",
-            optimizer=tf.keras.optimizers.Adam(lr),
+        self.trainer = L.Trainer(
+            accelerator="gpu",
+            # limit_val_batches=100,
+            max_epochs=max_train_epochs,
+            callbacks=[
+                EarlyStopping(monitor="val_loss", mode="min", patience=10),
+                DeviceStatsMonitor(),
+                # StochasticWeightAveraging(swa_lrs=1e-2),
+            ],
+            # accumulate_grad_batches=7,
+            # gradient_clip_val=0.5,
+            log_every_n_steps=20,
+            # profiler="simple",
         )
 
-    def setHeadWeights(self, new_weights):
-        self.model.get_layer(index=-2).set_weights(new_weights)
+    def train(self, X_train, Y_train):
 
-    def getHeadWeights(self):
-        return self.model.get_layer(index=-2).get_weights()
+        dataset = CustomDataset(X_train, Y_train)
+        # use 20% of training data for validation
+        train_set_size = int(len(dataset) * 0.8)
+        valid_set_size = len(dataset) - train_set_size
+        seed = torch.Generator().manual_seed(64)
+        train_set, val_set = torch.utils.data.random_split(
+            dataset, [train_set_size, valid_set_size], generator=seed
+        )
 
-    def train(
-        self,
-        X: pd.DataFrame,
-        Y: pd.DataFrame,
-        epochs=500,
-        val_split=0.2,
-        early_stop_patience=50,
-        batch_size=32,
-    ):
-        self.normalizer.adapt(np.array(X))
+        train_loader = data_utils.DataLoader(
+            train_set, batch_size=self.batch_size, shuffle=True, num_workers=19
+        )
+        val_loader = data_utils.DataLoader(
+            val_set, batch_size=self.batch_size, num_workers=19
+        )
 
-        split_idx = int(len(X) * val_split)
-        X_val = X.iloc[:split_idx, :]
-        Y_val = Y.iloc[:split_idx, :]
-        X_train = X.iloc[split_idx:, :]
-        Y_train = Y.iloc[split_idx:, :]
+        self.trainer.fit(self.lit_model, train_loader, val_loader)
 
-        batch_indices = []
-        idx = 0
-        while idx < len(X_train):
-            batch_indices.append(idx)
-            idx += batch_size
+    def hypertune(self):
+        # Create a Tuner
+        tuner = Tuner(self.trainer)
 
-        val_batch_indices = []
-        idx = 0
-        while idx < len(X_train):
-            val_batch_indices.append(idx)
-            idx += batch_size
+        # finds learning rate automatically
+        # sets hparams.lr or hparams.learning_rate to that learning rate
+        lr_finder = tuner.lr_find(self.lit_model, early_stop_threshold=None)
 
-        val_metric = keras.metrics.MeanAbsoluteError()
-        best_val_loss = 99999.9
-        epochs_until_stop = early_stop_patience
+        # Plot with
+        fig = lr_finder.plot(suggest=True)
+        fig.show()
+        fig.savefig("lrs.png")
 
-        history = {"loss": [], "val_loss": []}
+        # Pick point based on plot, or get suggestion
+        new_lr = lr_finder.suggestion()
 
-        with tqdm(total=epochs, colour="blue") as pbar:
-            for epoch in range(epochs):
-                pbar.update()
+        print(f"May we suggest: {new_lr}")
 
-                for step, batch_idx in enumerate(batch_indices):
-                    x_batch_train = X_train.iloc[batch_idx : batch_idx + batch_size, :]
-                    y_batch_train = Y_train.iloc[batch_idx : batch_idx + batch_size, :]
+        # # update hparams of the model
+        # self.lit_model.hparams.lr = new_lr
 
-                    with tf.GradientTape() as tape:
-                        logits = self.model(x_batch_train, training=True)
+        # # Fit model
+        # self.trainer.fit(self.lit_model)
 
-                        loss_value = tf.math.reduce_mean(
-                            self.loss_fn(y_batch_train, logits)
-                        )
+    def test(self, X_test, Y_test):
+        dataset = CustomDataset(X_test, Y_test)
 
-                    grads = tape.gradient(loss_value, self.model.trainable_weights)
+        test_dataloader = data_utils.DataLoader(
+            dataset, batch_size=len(X_test), num_workers=19
+        )
 
-                    self.optimizer.apply_gradients(
-                        zip(grads, self.model.trainable_weights)
-                    )
-
-                    # if step % 200 == 0:
-                    #     # print(
-                    #     #     f"Training loss (for one batch) at step {step}:{float(loss_value):.4f}"
-                    #     # )
-                    #     # print("Seen so far: %s samples" % ((step + 1) * batch_size))
-
-                for step, batch_idx in enumerate(val_batch_indices):
-                    x_batch_val = X_val.iloc[batch_idx : batch_idx + batch_size, :]
-                    y_batch_val = Y_val.iloc[batch_idx : batch_idx + batch_size, :]
-                    val_logits = self.model(x_batch_val, training=False)
-                    # Update val metrics
-                    # tf.math.reduce_mean(self.loss_fn(y_batch_val, val_logits))
-                    val_metric.update_state(y_batch_val, val_logits)
-                val_loss = val_metric.result()
-                val_metric.reset_state()
-
-                # For early stopping
-                if epochs_until_stop == 0:
-                    break
-                elif val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    epochs_until_stop = early_stop_patience
-                else:
-                    epochs_until_stop -= 1
-
-                history["loss"].append(float(loss_value))
-                history["val_loss"].append(float(val_loss))
-
-                pbar.set_description(
-                    f"Val loss:{float(val_loss):.3f}. Best: {best_val_loss:.3f}. Waiting {epochs_until_stop} epochs."
-                )
-
-        return history
-
-        # return self.model.fit(
-        #     X,
-        #     Y,
-        #     batch_size=batch_size,
-        #     epochs=epochs,
-        #     validation_split=val_split,
-        #     callbacks=[
-        #         callbacks.EarlyStopping(
-        #             monitor="val_loss", patience=early_stop_patience
-        #         )
-        #     ],
-        # )
+        self.trainer.test(self.lit_model, test_dataloader)
 
     def predict(self, X: pd.DataFrame):
-        return self.model.predict(X)
+        return self.lit_model.forward(X)

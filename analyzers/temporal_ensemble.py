@@ -66,10 +66,10 @@ class LitTemporalEnsemble(L.LightningModule):
             if input_dim is not None
             else nn.LazyLinear(hidden_size)
         )
-        self.relu1 = nn.ReLU()
+        self.relu1 = nn.LeakyReLU()
 
         self.l2 = nn.Linear(hidden_size, hidden_size)
-        self.relu2 = nn.ReLU()
+        self.relu2 = nn.LeakyReLU()
 
         self.drop = nn.Dropout(p)
         self.head = nn.Linear(hidden_size, output_dim)
@@ -285,6 +285,7 @@ class LitTemporalEnsemble(L.LightningModule):
         sup_loss, nbsup = masked_crossentropy(out1, labels)
         # unsup_loss = mse_loss(out1, out2)
         unsup_loss = torch.nn.functional.mse_loss(out1, out2, reduction="mean")
+        unsup_loss *= 0.0
         return sup_loss + w * unsup_loss, sup_loss, unsup_loss, nbsup
 
     def configure_optimizers(self):

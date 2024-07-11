@@ -22,7 +22,7 @@ import analyzers.utils as utils
 
 # from analyzers.mlp import MlpAnalyzer
 from analyzers.lightning_mlp import LightningMlpAnalyzer
-from analyzers.lightning_plain_mlp import LightningPlainMlpAnalyzer
+from analyzers.mlp import MlpAnalyzer
 from analyzers.temporal_ensemble import TemporalEnsembleAnalyzer
 from analyzers.cubist import CubistAnalyzer
 from analyzers.pi_mlp import PiMlpAnalyzer
