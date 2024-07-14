@@ -55,12 +55,12 @@ if __name__ == "__main__":
 
     ossl_labels = [
         # "cf_usda.c236_w.pct",
-        "oc_usda.c729_w.pct",
-        # "clay.tot_usda.a334_w.pct",
-        # "sand.tot_usda.c60_w.pct",
-        # "silt.tot_usda.c62_w.pct",
+        # "oc_usda.c729_w.pct",
+        "clay.tot_usda.a334_w.pct",
+        "sand.tot_usda.c60_w.pct",
+        "silt.tot_usda.c62_w.pct",
         # "bd_usda.a4_g.cm3",
-        # "wr.1500kPa_usda.a417_w.pct",
+        "wr.1500kPa_usda.a417_w.pct",
         # "awc.33.1500kPa_usda.c80_w.frac",
     ]
 
@@ -83,18 +83,35 @@ if __name__ == "__main__":
         n_components=120,
     )
 
-    (
-        (X_train, Y_train),
-        (X_test, Y_test),
-        original_label_mean,
-        original_label_std,
-    ) = ossl_db.loader.load(
-        labels=ossl_labels,
-        normalize_Y=True,
-        from_pkl=False,
-        include_unlabeled=True,
-        n_components=120,
-    )
+    # Let's take a look at the spectra
+    # utils.plotSpectraFromSet(X_train)
+    # print(X_train[0].shape)
+    # print(X_train)
+    # for spectrum in X_train.values[:]:
+    #     print(spectrum)
+    #     norm = (spectrum - spectrum.min()) / spectrum.max()
+    #     plt.plot(range(len(spectrum)), norm, c="blue")
+    # plt.show()
+
+    # (
+    #     (X_train, Y_train),
+    #     (X_test, Y_test),
+    #     original_label_mean,
+    #     original_label_std,
+    # ) = ossl_db.loader.load(
+    #     labels=ossl_labels,
+    #     normalize_Y=True,
+    #     from_pkl=False,
+    #     include_unlabeled=False,
+    #     n_components=120,
+    # )
+
+    # print(X_train.shape)
+    # for spectrum in X_train.values[:100]:
+    #     print(spectrum)
+    #     norm = (spectrum - spectrum.min()) / spectrum.max()
+    #     plt.plot(range(len(spectrum)), norm, c="red")
+    # plt.show()
 
     print(
         f"Y_train has {len(Y_train)-Y_train.isna().sum().sum()} non-null values ({(len(Y_train)-Y_train.isna().sum().sum())/len(Y_train)*100})"
@@ -110,13 +127,15 @@ if __name__ == "__main__":
     # X_train, X_test = X_test, X_train
     # Y_train, Y_test = Y_test, Y_train
 
-    # X_train, Y_train = utils.augmentSpectra(X_train, Y_train, reps=50)
+    X_train, Y_train = utils.augmentSpectra(X_train, Y_train, reps=50)
     # X_test, Y_test = utils.augmentSpectra(X_test, Y_test, reps=50)
 
     # utils.plotSpectraFromSet(X_train, n=30)
 
+    print(X_train.shape[1])
+
     analyzer = MlpAnalyzer(
-        output_size=1,
+        output_size=len(mississippi_labels),
         lr=1e-4,
         hidden_size=200,
         batch_size=128,

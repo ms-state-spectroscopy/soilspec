@@ -15,3 +15,5 @@ lightning_logs_old/
 events.out*
 *.csv
 *.xlsx
+version_1/
+named_ckpts/

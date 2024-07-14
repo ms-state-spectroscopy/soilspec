@@ -33,6 +33,11 @@ from lightning.pytorch.utilities import CombinedLoader
 
 from lightning.pytorch.tuner import Tuner
 
+# For .png -> .gif
+from PIL import Image
+import glob
+import contextlib
+
 
 # define the LightningModule
 class LitPlainMlp(L.LightningModule):
@@ -52,27 +57,24 @@ class LitPlainMlp(L.LightningModule):
 
         self.datasets = datasets
 
-        self.seq = nn.Sequential(
+        print(f"Input dim {input_dim}")
+        print(f"Hidden dim {hidden_size}")
+
+        self.backbone = nn.Sequential(
             nn.Linear(input_dim, hidden_size),
             nn.LeakyReLU(),
-            nn.Dropout(0.2),
+            nn.Dropout(p),
             nn.Linear(hidden_size, hidden_size),
             nn.LeakyReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(hidden_size, output_dim),
+            nn.Dropout(p),
+            nn.Linear(hidden_size, hidden_size),
+            nn.LeakyReLU(),
+            nn.Dropout(p),
         )
+
+        # self.backbone.requires_grad_(False)
 
         # Model layers
-        self.l1 = (
-            nn.Linear(input_dim, hidden_size)
-            if input_dim is not None
-            else nn.LazyLinear(hidden_size)
-        )
-        self.relu1 = nn.ReLU()
-
-        self.l2 = nn.Linear(hidden_size, hidden_size)
-        self.relu2 = nn.ReLU()
-        self.dropout = nn.Dropout(p=p)
 
         self.head = nn.Linear(hidden_size, output_dim)
 
@@ -81,7 +83,7 @@ class LitPlainMlp(L.LightningModule):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x = x.view(x.size(0), -1)
-        y_pred = self.seq(x)
+        y_pred = self.head(self.backbone(x))
         # y_pred = self.head(x)
         return y_pred
 
@@ -92,41 +94,28 @@ class LitPlainMlp(L.LightningModule):
         losses = []
 
         if self.training:
-            for _ in range(self.n_augmentations):
-                # Augment the spectrum
+            # Augment the spectrum
 
-                # Augmentation step 1: Vertical scaling
-                scaling_magnitude = 0.2  # TODO: Parameterize this
-                scale = (torch.rand(1, device="cuda") * 2 - 1) * scaling_magnitude
+            # Augmentation step 1: Vertical scaling
+            scaling_magnitude = 0.5  # TODO: Parameterize this
+            scale = (torch.rand(1, device="cuda") * 2 - 1) * scaling_magnitude
 
-                noise = torch.randn_like(x) * 1e-3  # TODO: Parameterize this
+            noise = torch.randn_like(x) * 1e-3  # TODO: Parameterize this
 
-                x: torch.Tensor
-                x_ = x.clone()
+            x: torch.Tensor
+            x_ = x.clone()
 
-                og_max = torch.max(x_)
-                x_ += x_ * scale
-                x_ += noise
-                y_pred = self.forward(x_)
+            og_max = torch.max(x_)
+            x_ += x_ * scale
+            x_ += noise
+            y_pred = self.forward(x_)
 
-                loss = nn.functional.mse_loss(y_pred, y)
+        else:
+            y_pred = self.forward(x)
 
-                print(f"The {_+1}th loss is {loss.item()}")
-                print(
-                    f"The {_+1}th spectra's max went from {og_max.item():.2f} -> {torch.max(x_).item():.2f} after {scale.item():.2f} scale"
-                )
-                losses.append(loss)
+        loss = nn.functional.mse_loss(y_pred, y)
 
-        y_pred = self.forward(x)
-
-        losses.append(nn.functional.mse_loss(y_pred, y))
-
-        loss = torch.mean(torch.stack(losses))
-        # print(f"The mean loss is {loss.item()}")
-
-        self.current_train_loss = loss
-
-        self.log(f"train_loss", loss)
+        self.log(f"train_loss", loss, prog_bar=True)
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -220,6 +209,12 @@ class LitPlainMlp(L.LightningModule):
         # ax.xlabel("True")
         # ax.xlabel("Predicted")
         ax.plot([-1, 1], [-1, 1])
+        ax.set_title(f"Real versus predicted results, epoch {self.current_epoch}")
+        ax.set_xlabel("Real")
+        ax.set_ylabel("Predicted")
+
+        if self.current_epoch > 0:
+            plt.gcf().savefig(f"version_{self._version}/{self.current_epoch}.png")
 
         tensorboard = self.logger.experiment
         tensorboard.add_figure(
@@ -231,6 +226,60 @@ class LitPlainMlp(L.LightningModule):
 
         return loss
 
+    def on_train_start(self):
+        path = f"version_{self._version}/"
+        try:
+            print(f"Creating {path}")
+            os.mkdir(path)
+        except FileExistsError:
+            import shutil
+
+            print(f"Path {path} already exists. Overwriting all contents.")
+            shutil.rmtree(path)
+            os.mkdir(path)
+
+    def on_test_start(self):
+
+        files: list = os.listdir(f"version_{self._version}/")
+        print(f"Saving gif with {len(files)} frames!")
+        images = []
+
+        # filepaths
+        fp_in = f"version_{self._version}/*.png"
+        fp_out = f"version_{self._version}/full.gif"
+
+        with contextlib.ExitStack() as stack:
+
+            # lazily load images
+            imgs = []
+
+            i = 1
+            while True:
+                try:
+                    imgs.append(
+                        stack.enter_context(
+                            Image.open(f"version_{self._version}/{i}.png")
+                        )
+                    )
+                    i += 1
+                except Exception as e:
+                    print(e)
+                    break
+
+            # extract  first image from iterator
+            imgs = iter(imgs)
+            img = next(imgs)
+
+            # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#gif
+            img.save(
+                fp=fp_out,
+                format="GIF",
+                append_images=imgs,
+                save_all=True,
+                duration=100,
+                loop=0,
+            )
+
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
@@ -240,11 +289,11 @@ class MlpAnalyzer(Analyzer):
     def __init__(
         self,
         output_size,
+        input_size,
         verbose: int = 0,
         lr=1e-3,
         hidden_size=200,
         batch_size: int = 100,
-        input_size=None,
         checkpoint_path=None,
         max_train_epochs: int = 1000,
         n_augmentations: int = 10,
@@ -264,17 +313,36 @@ class MlpAnalyzer(Analyzer):
         )
 
         if checkpoint_path is not None:
-            print(f"Loading checkpoint from {checkpoint_path}")
-            self.lit_model = LitPlainMlp.load_from_checkpoint(
-                checkpoint_path=checkpoint_path, output_dim=output_size
+            print(
+                f"Loading checkpoint from {checkpoint_path} with input size {input_size}"
             )
+            checkpoint = torch.load(checkpoint_path)
+            for k, v in checkpoint["state_dict"].items():
+                print(k, v)
+
+            for i in [0, 3, 6]:
+                self.lit_model.backbone[i].weight = torch.nn.Parameter(
+                    checkpoint["state_dict"][f"backbone.{i}.weight"]
+                )
+                self.lit_model.backbone[i].bias = torch.nn.Parameter(
+                    checkpoint["state_dict"][f"backbone.{i}.bias"]
+                )
+
+            # print(self.lit_model.seq.layer)
+            # self.lit_model = LitPlainMlp.load_from_checkpoint(
+            #     checkpoint_path=checkpoint_path,
+            #     output_dim=output_size,
+            #     input_dim=input_size,
+            # )
 
         self.trainer = L.Trainer(
             accelerator="gpu",
             # limit_val_batches=100,
             max_epochs=max_train_epochs,
             callbacks=[
-                EarlyStopping(monitor="r2/val", mode="max", patience=10),
+                EarlyStopping(
+                    monitor="r2/val", mode="max", patience=10, min_delta=0.01
+                ),
                 DeviceStatsMonitor(),
                 # StochasticWeightAveraging(swa_lrs=1e-2),
             ],
