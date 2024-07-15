@@ -8,12 +8,14 @@ from halo import Halo
 
 
 class CubistAnalyzer(Analyzer):
-    def __init__(self, verbose: int = 0, n_components: int = 120) -> None:
+    def __init__(
+        self, verbose: int = 0, n_components: int = 120, n_committees=10, neighbors=9
+    ) -> None:
         super().__init__(verbose=verbose)
         self.model = Cubist(
             verbose=verbose,
-            n_committees=10,
-            neighbors=9,
+            n_committees=n_committees,
+            neighbors=neighbors,
             unbiased=False,
         )
         self.pca = PCA(n_components=n_components)

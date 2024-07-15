@@ -78,7 +78,7 @@ if __name__ == "__main__":
         normalize_Y=True,
         from_pkl=False,
         include_unlabeled=False,
-        train_split=125 / 225,
+        train_split=185 / 225,
         include_depth=False,
         n_components=120,
     )
@@ -114,20 +114,20 @@ if __name__ == "__main__":
     # plt.show()
 
     print(
-        f"Y_train has {len(Y_train)-Y_train.isna().sum().sum()} non-null values ({(len(Y_train)-Y_train.isna().sum().sum())/len(Y_train)*100})"
+        f"Y_train has {len(Y_train)-np.isnan(Y_train).sum().sum()} non-null values ({(len(Y_train)-np.isnan(Y_train).sum().sum())/len(Y_train)*100})"
     )
     print(
-        f"Y_test has {len(Y_test)-Y_test.isna().sum().sum()} non-null values, {len(Y_test)} total values"
+        f"Y_test has {len(Y_test)-np.isnan(Y_test).sum().sum()} non-null values, {len(Y_test)} total values"
     )
 
-    print(Y_train.describe())
-    print(Y_test.describe())
+    # print(Y_train.describe())
+    # print(Y_test.describe())
 
     # Flippity floppity
     # X_train, X_test = X_test, X_train
     # Y_train, Y_test = Y_test, Y_train
 
-    X_train, Y_train = utils.augmentSpectra(X_train, Y_train, reps=50)
+    # X_train, Y_train = utils.augmentSpectra(X_train, Y_train, reps=50)
     # X_test, Y_test = utils.augmentSpectra(X_test, Y_test, reps=50)
 
     # utils.plotSpectraFromSet(X_train, n=30)

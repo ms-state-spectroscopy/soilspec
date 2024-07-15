@@ -49,7 +49,7 @@ class LitPlainMlp(L.LightningModule):
         output_dim: int = 1,
         datasets=None,
         n_augmentations=0,
-        p=0.5,
+        p=0.2,
     ):
         super().__init__()
         torch.set_float32_matmul_precision("medium")
@@ -155,7 +155,7 @@ class LitPlainMlp(L.LightningModule):
 
         ax = plt.subplot()
         ax.scatter(Y_true_no_outliers, Y_pred_no_outliers)
-        ax.plot([-1, 1], [-1, 1])
+        ax.plot([-1, 1], [-1, 1], c="red")
 
         plt.savefig("test_plot.png")
         plt.show()
@@ -208,7 +208,7 @@ class LitPlainMlp(L.LightningModule):
         ax.scatter(y_np, y_pred_np)
         # ax.xlabel("True")
         # ax.xlabel("Predicted")
-        ax.plot([-1, 1], [-1, 1])
+        ax.plot([-1, 1], [-1, 1], c="red")
         ax.set_title(f"Real versus predicted results, epoch {self.current_epoch}")
         ax.set_xlabel("Real")
         ax.set_ylabel("Predicted")

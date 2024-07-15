@@ -83,7 +83,7 @@ if __name__ == "__main__":
         normalize_Y=True,
         from_pkl=False,
         include_unlabeled=False,
-        train_split=125 / 225,
+        train_split=185 / 225,
         include_depth=False,
     )
 
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     #         # logdir=time.strftime("%Y_%m_%d-%H_%M"),
     #     )
 
-    analyzer = CubistAnalyzer(verbose=0)
+    analyzer = CubistAnalyzer(verbose=1, neighbors=None)
 
     # 3. Train the Analyzer on the training data.
 

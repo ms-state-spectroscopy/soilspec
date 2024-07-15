@@ -2,9 +2,55 @@ import pandas as pd
 import numpy as np
 from halo import Halo
 from sklearn.decomposition import PCA
+from matplotlib import pyplot as plt
+import random
 
 
 SPECTRUM_START_COLUMN = 16
+
+
+def augmentSpectra(
+    X: pd.DataFrame, Y: pd.DataFrame, reps: int, noise_std=1e-3, scale=1.5, plot=False
+):
+
+    augmented_Xs = []
+    augmented_Ys = []
+
+    for _ in range(reps):
+        # Scale spectrum by some value between 0.8-1.2
+
+        assert scale >= 1.0 and scale <= 2.0
+        scaling_factor_start = random.uniform((1 - scale), scale)
+        scaling_factor_end = random.uniform((1 - scale), scale)
+        scale_line = np.linspace(
+            scaling_factor_start, scaling_factor_end, num=X.shape[1]
+        )
+
+        # plt.plot(scale_line, label="Scale line")
+
+        noise = np.random.normal(1, noise_std, X.shape)
+
+        print(X.shape)
+        print(scale_line.shape)
+
+        # augmented_X = X.values * scale_line * noise
+
+        augmented_X = X.values
+
+        print(augmented_X.shape)
+
+        # plt.plot(augmented_X[0, :], label="X*")
+        # plt.plot(X.values[0, :], label="X")
+        # plt.legend()
+        # plt.show()
+        # plotSpectraFromSet(X, indices=0, show=False)
+        augmented_Xs.append(augmented_X)
+        augmented_Ys.append(Y)
+
+    X_augemented = np.asarray(augmented_Xs).reshape((-1, X.shape[1]))
+    Y_augmented = np.asarray(augmented_Ys).reshape((-1, Y.shape[1]))
+
+    return X_augemented, Y_augmented
 
 
 def getPicklePath(labels):
@@ -125,9 +171,13 @@ def load(
     X_train = train_dataset.loc[:, spectra_column_names]
     X_test = test_dataset.loc[:, spectra_column_names]
 
+    Y_train = train_dataset.loc[:, labels]
+    Y_test = test_dataset.loc[:, labels]
     if n_components is not None:
         pca = PCA(n_components=n_components)
         pca.fit(np.vstack((X_train.values, X_test.values)))
+
+        X_train, Y_train = augmentSpectra(X_train, Y_train, reps=50)
 
         X_train = pca.transform(X_train)
         X_test = pca.transform(X_test)
@@ -140,9 +190,6 @@ def load(
         X_test = X_test.join(
             test_dataset.loc[:, ["lay.depth.to.bottom", "lay.depth.to.top"]]
         )
-
-    Y_train = train_dataset.loc[:, labels]
-    Y_test = test_dataset.loc[:, labels]
 
     if normalize_Y:
         return (

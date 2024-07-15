@@ -229,12 +229,25 @@ def augmentSpectra(
         # Scale spectrum by some value between 0.8-1.2
 
         assert scale >= 1.0 and scale <= 2.0
-        scaling_factor = random.uniform((2 - scale), 1.2)
+        scaling_factor_start = random.uniform((1 - scale), scale)
+        scaling_factor_end = random.uniform((1 - scale), scale)
+        scale_line = np.linspace(
+            scaling_factor_start, scaling_factor_end, num=X.shape[1]
+        )
+
+        plt.plot(scale_line, label="Scale line")
 
         noise = np.random.normal(1, noise_std, X.shape)
 
-        augmented_X = X * scaling_factor * noise
+        print(X.shape)
+        print(scale_line.shape)
 
+        augmented_X = X * scale_line * noise
+
+        plt.plot(augmented_X[0, :], label="X*")
+        plt.plot(X[0, :], label="X")
+        plt.legend()
+        plt.show()
         # plotSpectraFromSet(X, indices=0, show=False)
         if plot:
             plotSpectraFromSet(augmented_X, indices=0, show=False)
