@@ -26,6 +26,7 @@ def load(
     normalize_Y=False,
     from_pkl=False,
     include_unlabeled=True,
+    take_grad=True,
     n_components=None,
 ) -> tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]:
     """Load the averaged NIR samples from the Neospectra dataset
@@ -146,9 +147,21 @@ def load(
     X_train = train_dataset.loc[:, spectra_column_names]
     X_test = test_dataset.loc[:, spectra_column_names]
 
+    # Convert to numpy
+    X_train = X_train.values
+    X_test = X_test.values
+
+    if take_grad == True:
+        # Convert the data to use the gradient
+        X_train = np.gradient(X_train, axis=1)
+
+        X_train = (X_train - X_train.min(axis=1).reshape(-1, 1)) / X_train.max(
+            axis=1
+        ).reshape(-1, 1)
+
     if n_components is not None:
         pca = PCA(n_components=n_components)
-        pca.fit(np.vstack((X_train.values, X_test.values)))
+        pca.fit(np.vstack((X_train, X_test)))
 
         X_train = pca.transform(X_train)
         X_test = pca.transform(X_test)

@@ -320,7 +320,7 @@ def plotSpectraFromSet(df: pd.DataFrame, n=1, indices=None, show=True):
         plt.show()
 
 
-def seedEverything():
+def seedEverything(seed: int = 64):
     """Seeds pseudorandomness in PyTorch, Numpy, and Python's `random` module."""
     L.seed_everything(64)
 

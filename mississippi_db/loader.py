@@ -10,39 +10,39 @@ SPECTRUM_START_COLUMN = 16
 
 
 def augmentSpectra(
-    X: pd.DataFrame, Y: pd.DataFrame, reps: int, noise_std=1e-3, scale=1.5, plot=False
+    X: pd.DataFrame, Y: pd.DataFrame, reps: int, noise_std=1e-3, scale=0.5, plot=False
 ):
 
     augmented_Xs = []
     augmented_Ys = []
 
+    augmented_Xs.append(X.values)
+    augmented_Ys.append(Y)
+
+    X = X.values
+
     for _ in range(reps):
         # Scale spectrum by some value between 0.8-1.2
 
-        assert scale >= 1.0 and scale <= 2.0
-        scaling_factor_start = random.uniform((1 - scale), scale)
-        scaling_factor_end = random.uniform((1 - scale), scale)
-        scale_line = np.linspace(
-            scaling_factor_start, scaling_factor_end, num=X.shape[1]
-        )
-
+        assert scale > 0.0 and scale < 1.0
+        scaling_factor = random.uniform(1 - scale, 1 + scale)
         # plt.plot(scale_line, label="Scale line")
 
         noise = np.random.normal(1, noise_std, X.shape)
 
-        print(X.shape)
-        print(scale_line.shape)
+        augmented_X = (X * scaling_factor) * noise
 
-        # augmented_X = X.values * scale_line * noise
+        # augmented_X = X.values
 
-        augmented_X = X.values
+        print(
+            f"Augmenting by {scaling_factor}. Max went from {X.max()}->{augmented_X.max()}"
+        )
 
-        print(augmented_X.shape)
-
-        # plt.plot(augmented_X[0, :], label="X*")
-        # plt.plot(X.values[0, :], label="X")
-        # plt.legend()
-        # plt.show()
+        if plot:
+            plt.plot(augmented_X[0, :], label="X*")
+            plt.plot(X[0, :], label="X")
+            plt.legend()
+            plt.show()
         # plotSpectraFromSet(X, indices=0, show=False)
         augmented_Xs.append(augmented_X)
         augmented_Ys.append(Y)
@@ -66,26 +66,15 @@ def getPicklePath(labels):
 
 def load(
     labels: list[str],
-    include_ec=True,
-    include_depth=True,
     train_split=0.75,
     normalize_Y=False,
     match_ossl_spectra=True,
     from_pkl=False,
-    include_unlabeled=False,
+    take_grad=True,
     n_components=None,
+    n_augmentations=0,
+    seed=64,
 ) -> tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]:
-    """Load the averaged NIR samples from the Neospectra dataset
-
-    Args:
-        labels (list[str]): The labels that we wish to include in Y_train and Y_test
-        include_ec (bool, optional): Include soil electroconductivity as a feature. Defaults to True.
-        train_split (float, optional): Split between training and test set. Defaults to 0.75.
-        normalize_Y (bool, optional): Whether to normalize the labels. Defaults to False.
-
-    Returns:
-        tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]: _description_
-    """
 
     if from_pkl:
         try:
@@ -94,8 +83,6 @@ def load(
             print(f"{getPicklePath(labels)} not found. Falling back to csv.")
             return load(
                 labels=labels,
-                include_ec=include_ec,
-                include_depth=include_depth,
                 train_split=train_split,
                 normalize_Y=normalize_Y,
                 match_ossl_spectra=match_ossl_spectra,
@@ -152,44 +139,56 @@ def load(
         # Normalize
         dataset.loc[:, labels] = (Y - Y.mean()) / Y.std()
 
-        if include_unlabeled:
-            labeled_dataset = dataset.dropna(axis="index", subset=labels)
-        else:
-            dataset = dataset.dropna(axis="index", subset=labels)
+        dataset = dataset.dropna(axis="index", subset=labels)
 
     # Split into train and test
 
-    # If we're including unlabeled data, we only want labeled data in the test set
-    if include_unlabeled:
-        test_dataset = labeled_dataset.sample(frac=1 - train_split, random_state=64)
-    else:
-        test_dataset = dataset.sample(frac=1 - train_split, random_state=64)
-    train_dataset = dataset.drop(test_dataset.index)
+    X = dataset.loc[:, spectra_column_names]
+    Y = dataset.loc[:, labels]
 
-    # NOTE: We assume that a column contains spectral data IFF the column name is a float,
-    # and that this column name is a wavelength in nm.
-    X_train = train_dataset.loc[:, spectra_column_names]
-    X_test = test_dataset.loc[:, spectra_column_names]
+    X, Y = augmentSpectra(X, Y, reps=n_augmentations)
 
-    Y_train = train_dataset.loc[:, labels]
-    Y_test = test_dataset.loc[:, labels]
+    # Random indices for splitting into train & test
+    indices = np.arange(X.shape[0])
+    np.random.shuffle(indices)
+
+    print(indices)
+
+    stop_idx = int(X.shape[0] * train_split)
+
+    X_train = X[indices[:stop_idx], :]
+    Y_train = Y[indices[:stop_idx], :]
+    X_test = X[indices[stop_idx:], :]
+    Y_test = Y[indices[stop_idx:], :]
+
+    # test_dataset = dataset.sample(frac=1 - train_split, random_state=seed)
+
+    # train_dataset = dataset.drop(test_dataset.index)
+
+    # # NOTE: We assume that a column contains spectral data IFF the column name is a float,
+    # # and that this column name is a wavelength in nm.
+    # X_train = train_dataset.loc[:, spectra_column_names]
+    # X_test = test_dataset.loc[:, spectra_column_names]
+
+    if take_grad == True:
+        # Convert the data to use the gradient
+        X_train = np.gradient(X_train, axis=1)
+
+        X_train = (X_train - X_train.min(axis=1).reshape(-1, 1)) / X_train.max(
+            axis=1
+        ).reshape(-1, 1)
+
+    # Y_train = train_dataset.loc[:, labels]
+    # Y_test = test_dataset.loc[:, labels]
     if n_components is not None:
         pca = PCA(n_components=n_components)
-        pca.fit(np.vstack((X_train.values, X_test.values)))
+        pca.fit(np.vstack((X_train, X_test)))
 
-        X_train, Y_train = augmentSpectra(X_train, Y_train, reps=50)
+        # X_train, Y_train = augmentSpectra(X_train, Y_train, reps=n_augmentations)
+        # X_test, Y_test = augmentSpectra(X_test, Y_test, reps=n_augmentations)
 
         X_train = pca.transform(X_train)
         X_test = pca.transform(X_test)
-
-    if include_depth:
-
-        X_train = X_train.join(
-            train_dataset.loc[:, ["lay.depth.to.bottom", "lay.depth.to.top"]]
-        )
-        X_test = X_test.join(
-            test_dataset.loc[:, ["lay.depth.to.bottom", "lay.depth.to.top"]]
-        )
 
     if normalize_Y:
         return (

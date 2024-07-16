@@ -82,6 +82,7 @@ class LitPlainMlp(L.LightningModule):
         self.current_train_loss = 0.0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+
         # x = x.view(x.size(0), -1)
         y_pred = self.head(self.backbone(x))
         # y_pred = self.head(x)
@@ -93,29 +94,38 @@ class LitPlainMlp(L.LightningModule):
 
         losses = []
 
-        if self.training:
-            # Augment the spectrum
+        if self.training and self.n_augmentations > 0:
+            preds = []
+            for _ in range(self.n_augmentations):
 
-            # Augmentation step 1: Vertical scaling
-            scaling_magnitude = 0.5  # TODO: Parameterize this
-            scale = (torch.rand(1, device="cuda") * 2 - 1) * scaling_magnitude
+                # should be in range (1-scaling_factor, 1+scaling factor)
+                # starts in range (0,1)
+                # Moves to range (-1,1)
+                scaling_factor = (torch.rand(1).cuda() * 2 - 1) * 0.5 + 1
+                # plt.plot(scale_line, label="Scale line")
 
-            noise = torch.randn_like(x) * 1e-3  # TODO: Parameterize this
+                noise = torch.randn_like(x) * 1e-3
 
-            x: torch.Tensor
-            x_ = x.clone()
+                print(f"Scaling factor is {scaling_factor}")
 
-            og_max = torch.max(x_)
-            x_ += x_ * scale
-            x_ += noise
-            y_pred = self.forward(x_)
+                augmented_X = x * scaling_factor
+                # augmented_X = x * scaling_factor
+                preds.append(self.head(self.backbone(augmented_X)))
+
+            preds = torch.stack(preds)
+            y_pred = preds.mean(dim=0)
+            # print(preds.shape)
+            # print(y_pred.shape)
 
         else:
             y_pred = self.forward(x)
 
+        # print(f"{y.shape} vs {y_pred.shape}")
+
         loss = nn.functional.mse_loss(y_pred, y)
 
         self.log(f"train_loss", loss, prog_bar=True)
+        self.current_train_loss = loss
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -154,8 +164,17 @@ class LitPlainMlp(L.LightningModule):
             r2 = rsquared(y_np, y_pred_np)
 
         ax = plt.subplot()
-        ax.scatter(Y_true_no_outliers, Y_pred_no_outliers)
-        ax.plot([-1, 1], [-1, 1], c="red")
+        ax.scatter(y_np, y_pred_np)
+        ax.plot([y_np.min(), y_np.max()], [y_np.min(), y_np.max()], c="red")
+        ax.set_title(f"Real versus predicted results, epoch {self.current_epoch}")
+        ax.set_xlabel("Real")
+        ax.set_ylabel("Predicted")
+
+        # Set the plot boundaries and aspect
+        eps = 1.1  # So that min/max values are not on the edge
+        ax.set_xlim(y_np.min() * eps, y_np.max() * eps)
+        ax.set_ylim(y_np.min() * eps, y_np.max() * eps)
+        ax.set_aspect("equal")
 
         plt.savefig("test_plot.png")
         plt.show()
@@ -163,6 +182,78 @@ class LitPlainMlp(L.LightningModule):
         self.log(f"test_r2", r2)
 
         return loss
+
+    def on_train_epoch_end(self):
+
+        # if self.test_ds is None:
+        #     print("Skipping testing.")
+        #     return
+
+        # x = torch.from_numpy(self.test_ds.X.astype(np.float32)).cuda()
+        # y = torch.from_numpy(self.test_ds.Y.astype(np.float32)).cuda()
+
+        # # Do some sneaky testing and logging
+
+        # y_pred = self.forward(x)
+
+        # loss = nn.functional.mse_loss(y_pred, y).reshape(1)
+
+        # tensorboard = self.logger.experiment
+        # tensorboard.add_scalars(
+        #     "loss",
+        #     {"val": loss, "train": self.current_train_loss},
+        #     global_step=self.current_epoch,
+        # )
+
+        # y_np: np.ndarray = y.numpy(force=True).reshape((-1, 1))
+        # y_pred_np: np.ndarray = y_pred.numpy(force=True).reshape((-1, 1))
+
+        # # Filter to only include non-nan values
+        # y_pred_np = y_pred_np[np.isnan(y_np) == False]
+        # y_np = y_np[np.isnan(y_np) == False]
+
+        # if np.isnan(y_np).any():
+        #     print(
+        #         f"Labels contain {np.isnan(y_np).sum()} null values ({np.isnan(y_np).sum()/y_np.size*100:.2f}%)!"
+        #     )
+        #     print(
+        #         f"Labels contain {y_np.size-np.isnan(y_np).sum()} null values ({(y_np.size-np.isnan(y_np).sum())/y_np.size*100:.2f}%)!"
+        #     )
+        #     r2 = -1.0
+        # elif np.isnan(y_pred_np).any():
+        #     print(f"Predictions contain {np.isnan(y_pred_np).sum()} null values!")
+        #     r2 = -1.0
+        # else:
+        #     r2 = rsquared(y_np, y_pred_np)
+
+        # # test_pd = pd.DataFrame(
+        # #     np.hstack((y_np, y_pred_np)), columns=["y_true", "y_pred"]
+        # # )
+        # # test_pd.to_csv(f"test_results_{batch_idx}.csv")
+
+        # ax = plt.subplot()
+        # ax.scatter(y_np, y_pred_np)
+        # ax.plot([y_np.min(), y_np.max()], [y_np.min(), y_np.max()], c="red")
+        # ax.set_title(f"Real versus predicted results, epoch {self.current_epoch}")
+        # ax.set_xlabel("Real")
+        # ax.set_ylabel("Predicted")
+
+        # # Set the plot boundaries and aspect
+        # eps = 1.1  # So that min/max values are not on the edge
+        # ax.set_xlim(y_np.min() * eps, y_np.max() * eps)
+        # ax.set_ylim(y_np.min() * eps, y_np.max() * eps)
+        # ax.set_aspect("equal")
+
+        # if self.current_epoch > 0:
+        #     plt.gcf().savefig(f"version_{self._version}/{self.current_epoch}.png")
+
+        # tensorboard = self.logger.experiment
+        # tensorboard.add_figure(
+        #     "real_vs_pred/test", plt.gcf(), global_step=self.current_epoch
+        # )
+
+        # # log the outputs!
+        # self.log("r2/test", r2, prog_bar=True)
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
         x, y = batch
@@ -206,12 +297,16 @@ class LitPlainMlp(L.LightningModule):
 
         ax = plt.subplot()
         ax.scatter(y_np, y_pred_np)
-        # ax.xlabel("True")
-        # ax.xlabel("Predicted")
-        ax.plot([-1, 1], [-1, 1], c="red")
+        ax.plot([y_np.min(), y_np.max()], [y_np.min(), y_np.max()], c="red")
         ax.set_title(f"Real versus predicted results, epoch {self.current_epoch}")
         ax.set_xlabel("Real")
         ax.set_ylabel("Predicted")
+
+        # Set the plot boundaries and aspect
+        eps = 1.1  # So that min/max values are not on the edge
+        ax.set_xlim(y_np.min() * eps, y_np.max() * eps)
+        ax.set_ylim(y_np.min() * eps, y_np.max() * eps)
+        ax.set_aspect("equal")
 
         if self.current_epoch > 0:
             plt.gcf().savefig(f"version_{self._version}/{self.current_epoch}.png")
@@ -317,8 +412,8 @@ class MlpAnalyzer(Analyzer):
                 f"Loading checkpoint from {checkpoint_path} with input size {input_size}"
             )
             checkpoint = torch.load(checkpoint_path)
-            for k, v in checkpoint["state_dict"].items():
-                print(k, v)
+            # for k, v in checkpoint["state_dict"].items():
+            #     print(k, v)
 
             for i in [0, 3, 6]:
                 self.lit_model.backbone[i].weight = torch.nn.Parameter(
@@ -341,7 +436,7 @@ class MlpAnalyzer(Analyzer):
             max_epochs=max_train_epochs,
             callbacks=[
                 EarlyStopping(
-                    monitor="r2/val", mode="max", patience=10, min_delta=0.01
+                    monitor="r2/val", mode="max", patience=50, min_delta=0.01
                 ),
                 DeviceStatsMonitor(),
                 # StochasticWeightAveraging(swa_lrs=1e-2),
@@ -352,7 +447,7 @@ class MlpAnalyzer(Analyzer):
             # profiler="simple",
         )
 
-    def train(self, X_train, Y_train):
+    def train(self, X_train, Y_train, X_test=None, Y_test=None):
 
         dataset = CustomDataset(X_train, Y_train)
         # use 20% of training data for validation
@@ -369,6 +464,16 @@ class MlpAnalyzer(Analyzer):
         val_loader = data_utils.DataLoader(
             val_set, batch_size=valid_set_size, num_workers=19
         )
+
+        if X_test is not None and Y_test is not None:
+            print("Setting test_ds")
+            self.lit_model.test_ds = CustomDataset(X_test, Y_test)
+
+            self.test_dl = data_utils.DataLoader(
+                dataset, batch_size=len(X_test), num_workers=19
+            )
+        else:
+            print(X_test, Y_test)
 
         self.trainer.fit(self.lit_model, train_loader, val_loader)
 
