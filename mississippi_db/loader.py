@@ -152,14 +152,14 @@ def load(
     indices = np.arange(X.shape[0])
     np.random.shuffle(indices)
 
-    print(indices)
-
     stop_idx = int(X.shape[0] * train_split)
 
     X_train = X[indices[:stop_idx], :]
     Y_train = Y[indices[:stop_idx], :]
     X_test = X[indices[stop_idx:], :]
     Y_test = Y[indices[stop_idx:], :]
+
+    # TODO: Split file using JSON format
 
     # test_dataset = dataset.sample(frac=1 - train_split, random_state=seed)
 

@@ -60,7 +60,8 @@ if __name__ == "__main__":
 
     # These are the labels that we should train/predict on
     # They should match the column names in the CSV file
-    mississippi_labels = ["wilting_point"]
+    # mississippi_labels = ["wilting_point"]
+    mississippi_labels = ["field_capacity"]
 
     ossl_labels = [
         # "cf_usda.c236_w.pct",
@@ -92,8 +93,10 @@ if __name__ == "__main__":
     )
 
     # Select only original, non-augmented test values
-    X_test = X_test[::n_dataset_augmentations]
-    Y_test = Y_test[::n_dataset_augmentations]
+    print(f"Y_test has {len(np.unique(Y_test))} unique vals")
+    if n_dataset_augmentations > 0:
+        X_test = X_test[::n_dataset_augmentations]
+        Y_test = Y_test[::n_dataset_augmentations]
 
     print(f"Y_test has shape {Y_test.shape}")
 
@@ -152,7 +155,7 @@ if __name__ == "__main__":
         X_train = X_train.values
 
     for spectrum in X_train[:100]:
-        print(spectrum)
+        # print(spectrum)
         norm = (spectrum - spectrum.min()) / spectrum.max()
         plt.plot(range(len(spectrum)), norm, c="red")
     plt.show()
@@ -170,6 +173,8 @@ if __name__ == "__main__":
         original_label_mean,
         original_label_std,
     )
+
+    # TODO: K-fold cross val
     analyzer = MlpAnalyzer(
         output_size=len(mississippi_labels),
         lr=1e-4,
@@ -180,6 +185,6 @@ if __name__ == "__main__":
         n_augmentations=0,
     )
     if not args.skip_training:
-        analyzer.train(X_train, Y_train, X_test, Y_test)
+        analyzer.train(X_train, Y_train)
 
     analyzer.test(X_test, Y_test)
