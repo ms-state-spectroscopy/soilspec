@@ -16,10 +16,10 @@ def augmentSpectra(
     augmented_Xs = []
     augmented_Ys = []
 
-    augmented_Xs.append(X.values)
+    augmented_Xs.append(X)
     augmented_Ys.append(Y)
 
-    X = X.values
+    X = X
 
     for _ in range(reps):
         # Scale spectrum by some value between 0.8-1.2
@@ -34,9 +34,9 @@ def augmentSpectra(
 
         # augmented_X = X.values
 
-        print(
-            f"Augmenting by {scaling_factor}. Max went from {X.max()}->{augmented_X.max()}"
-        )
+        # print(
+        #     f"Augmenting by {scaling_factor}. Max went from {X.max()}->{augmented_X.max()}"
+        # )
 
         if plot:
             plt.plot(augmented_X[0, :], label="X*")
@@ -126,27 +126,34 @@ def load(
 
     before_len = len(dataset)
     dataset = dataset.dropna(axis="index", subset=spectra_column_names)
+    dataset = dataset.dropna(axis="index", subset=labels)
     print(
         f"Dataset length went from {before_len} to {len(dataset)} after dropping nans from spectra"
     )
 
+    print(dataset.head(10))
+
+    # Take average across three trials/scans
+    X = dataset.loc[:, spectra_column_names].groupby("sample_id").mean()
+    Y = dataset.loc[X.index, labels].groupby("sample_id").mean()
+
+    print(X)
+    print(Y)
+
     # Save for unnormalization later
+    original_label_std = Y.std()
+    original_label_mean = Y.mean()
+
+    # Y = Y.values
     if normalize_Y:
-        Y = dataset.loc[:, labels]
-        original_label_std = Y.std()
-        original_label_mean = Y.mean()
-
         # Normalize
-        dataset.loc[:, labels] = (Y - Y.mean()) / Y.std()
+        Y -= Y.min()
+        Y /= Y.max()
 
-        dataset = dataset.dropna(axis="index", subset=labels)
-
-    # Split into train and test
-
-    X = dataset.loc[:, spectra_column_names]
-    Y = dataset.loc[:, labels]
-
-    X, Y = augmentSpectra(X, Y, reps=n_augmentations)
+    print(f"Y has {len(np.unique(Y))} unique vals / {len(Y)} total")
+    print(f"X has {len(np.unique(X.iloc[:,100]))} unique vals / {len(X)} total")
+    print(f"X has {len(np.unique(X.iloc[:,1]))} unique vals / {len(X)} total")
+    print(f"X has {len(np.unique(X.iloc[:,1000]))} unique vals / {len(X)} total")
 
     # Random indices for splitting into train & test
     indices = np.arange(X.shape[0])
@@ -154,10 +161,29 @@ def load(
 
     stop_idx = int(X.shape[0] * train_split)
 
-    X_train = X[indices[:stop_idx], :]
-    Y_train = Y[indices[:stop_idx], :]
-    X_test = X[indices[stop_idx:], :]
-    Y_test = Y[indices[stop_idx:], :]
+    X_train = X.values[indices[:stop_idx], :]
+    Y_train = Y.values[indices[:stop_idx], :]
+
+    X_test = X.values[indices[stop_idx:], :]
+    Y_test = Y.values[indices[stop_idx:], :]
+    X_train, Y_train = augmentSpectra(X_train, Y_train, reps=n_augmentations)
+
+    print(indices)
+    print(stop_idx)
+    print(len(indices))
+
+    # print(
+    #     np.hstack(
+    #         (np.unique(Y_train).reshape((-1, 1)), np.unique(Y_test).reshape((-1, 1)))
+    #     )
+    # )
+
+    print(
+        f"There are {len(np.unique(np.concatenate((Y_train, Y_test))))} unique values across Y_train, Y_test"
+    )
+    print(
+        f"Y_train {len(np.intersect1d(Y_train, Y_test))} values common values with Y_train"
+    )
 
     # TODO: Split file using JSON format
 
@@ -190,12 +216,9 @@ def load(
         X_train = pca.transform(X_train)
         X_test = pca.transform(X_test)
 
-    if normalize_Y:
-        return (
-            (X_train, Y_train),
-            (X_test, Y_test),
-            original_label_mean,
-            original_label_std,
-        )
-    else:
-        return (X_train, Y_train), (X_test, Y_test)
+    return (
+        (X_train, Y_train),
+        (X_test, Y_test),
+        original_label_mean,
+        original_label_std,
+    )

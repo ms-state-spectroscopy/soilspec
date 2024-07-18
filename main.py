@@ -14,6 +14,8 @@ import argparse
 
 import pandas as pd
 from sklearn.decomposition import PCA
+from analyzers.cubist import CubistAnalyzer
+from analyzers.rf import RandomForestAnalyzer
 import mississippi_db
 import mississippi_db.loader
 import ossl_db.loader
@@ -86,41 +88,16 @@ if __name__ == "__main__":
         labels=mississippi_labels,
         normalize_Y=True,
         from_pkl=False,
-        train_split=125 / 225,
+        train_split=50 / 75,
         take_grad=False,
         n_augmentations=n_dataset_augmentations,
         n_components=60,
     )
 
-    # Select only original, non-augmented test values
-    print(f"Y_test has {len(np.unique(Y_test))} unique vals")
-    if n_dataset_augmentations > 0:
-        X_test = X_test[::n_dataset_augmentations]
-        Y_test = Y_test[::n_dataset_augmentations]
-
-    print(f"Y_test has shape {Y_test.shape}")
-
-    # (
-    #     _,
-    #     (X_test, Y_test),
-    #     original_label_mean,
-    #     original_label_std,
-    # ) = mississippi_db.loader.load(
-    #     labels=mississippi_labels,
-    #     normalize_Y=True,
-    #     from_pkl=False,
-    #     train_split=100 / 225,
-    #     take_grad=False,
-    #     n_augmentations=0,
-    #     n_components=60,
-    # )
-
     # exit()
 
-    # Let's take a look at the spectra
-    # utils.plotSpectraFromSet(X_train)
-    if isinstance(X_train, pd.DataFrame):
-        X_train = X_train.values
+    # Select only original, non-augmented test values
+    print(f"Y_test has {len(np.unique(Y_test))} unique vals")
 
     # X_train = (X_train - X_train.min(axis=1).reshape(-1, 1)) / X_train.max(
     #     axis=1
@@ -151,14 +128,11 @@ if __name__ == "__main__":
             n_components=60,
         )
 
-    if isinstance(X_train, pd.DataFrame):
-        X_train = X_train.values
-
-    for spectrum in X_train[:100]:
-        # print(spectrum)
-        norm = (spectrum - spectrum.min()) / spectrum.max()
-        plt.plot(range(len(spectrum)), norm, c="red")
-    plt.show()
+    # for spectrum in X_train[:100]:
+    #     # print(spectrum)
+    #     norm = (spectrum - spectrum.min()) / spectrum.max()
+    #     plt.plot(range(len(spectrum)), norm, c="red")
+    # plt.show()
 
     print(
         f"Y_train has {len(Y_train)-np.isnan(Y_train).sum().sum()} non-null values ({(len(Y_train)-np.isnan(Y_train).sum().sum())/len(Y_train)*100})"
@@ -167,8 +141,6 @@ if __name__ == "__main__":
         f"Y_test has {len(Y_test)-np.isnan(Y_test).sum().sum()} non-null values, {len(Y_test)} total values"
     )
 
-    print(f"X_train has shape {X_train.shape}")
-
     print(
         original_label_mean,
         original_label_std,
@@ -176,7 +148,7 @@ if __name__ == "__main__":
 
     # TODO: K-fold cross val
     analyzer = MlpAnalyzer(
-        output_size=len(mississippi_labels),
+        output_size=len(ossl_labels if args.pre_train else mississippi_labels),
         lr=1e-4,
         hidden_size=200,
         batch_size=128,
@@ -184,7 +156,46 @@ if __name__ == "__main__":
         checkpoint_path=args.load_analyzer,
         n_augmentations=0,
     )
+
+    for i, spectrum in enumerate(X_train[:5]):
+        plt.plot(range(len(spectrum)), spectrum, label=str(Y_train[i]))
+
+    for i, spectrum in enumerate(X_test[:5]):
+        plt.plot(range(len(spectrum)), spectrum, label=str(Y_train[i]))
+
+    plt.ylabel("PCA component magnitude")
+    plt.ylabel("PCA component index")
+
+    plt.legend()
+    plt.title("Subsample of train and test features")
+    plt.show()
+
+    # analyzer = CubistAnalyzer()
+    # analyzer = RandomForestAnalyzer()
+
+    print(f"X_train has shape {X_train.shape}")
+    print(f"Y_test has shape {Y_test.shape}")
+
+    print(len(np.intersect1d(X_test[:, 1], X_train[:, 1])))
+    print(len(np.intersect1d(Y_test, Y_train)))
+    print(len(np.unique(np.concatenate((Y_train, Y_test)))))
+
+    assert (
+        len(np.intersect1d(Y_train, Y_test)) == 0
+    ) or args.pre_train, f"Y_train {len(np.intersect1d(Y_train, Y_test))} values common values with Y_test"
+
+    if not args.pre_train:
+        ax = plt.subplot()
+        ax.hist(Y_train, color="blue", alpha=0.5, label="Training data")
+        ax.set_ylabel("Train label counts")
+
+        ax2 = ax.twinx()
+        ax2.hist(Y_test, alpha=0.5, color="red")
+        ax2.set_ylabel("Test label counts")
+        ax.set_title("Distribution of training and test labels")
+        plt.show()
+
     if not args.skip_training:
-        analyzer.train(X_train, Y_train)
+        analyzer.train(X_train, Y_train, X_test, Y_test)
 
     analyzer.test(X_test, Y_test)

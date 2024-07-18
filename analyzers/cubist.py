@@ -18,25 +18,25 @@ class CubistAnalyzer(Analyzer):
             neighbors=neighbors,
             unbiased=False,
         )
-        self.pca = PCA(n_components=n_components)
+        # self.pca = PCA(n_components=n_components)
 
     def train(self, X: pd.DataFrame, Y: pd.DataFrame):
         with Halo(f"Fitting Cubist model to {len(Y)} samples"):
-            self.pca.fit(X)
-            print(
-                f"[Cubist] PCA has the following EVR:\n {self.pca.explained_variance_ratio_} SVs."
-            )
-            X_reduced = self.pca.transform(X)
-            self.model.fit(X_reduced, Y)
+            # self.pca.fit(X)
+            # print(
+            #     f"[Cubist] PCA has the following EVR:\n {self.pca.explained_variance_ratio_} SVs."
+            # )
+            # X_reduced = self.pca.transform(X)
+            self.model.fit(X, Y)
 
     def predict(self, X: pd.DataFrame):
-        X_reduced = self.pca.transform(X)
-        return self.model.predict(X_reduced)
+        # X_reduced = self.pca.transform(X)
+        return self.model.predict(X)
 
     def test(self, X: pd.DataFrame, Y: pd.DataFrame) -> float:
         with Halo(f"Scoring Cubist model on {len(Y)} samples"):
-            X_reduced = self.pca.transform(X)
-            r2 = self.model.score(X_reduced, Y)
+            # X_reduced = self.pca.transform(X)
+            r2 = self.model.score(X, Y)
 
         print(f"The R2 of the Cubist model is {r2:.3f}")
         return r2

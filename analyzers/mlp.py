@@ -15,7 +15,7 @@ from tqdm import trange, tqdm
 from analyzers.utils import rsquared
 import matplotlib
 
-matplotlib.use("Agg")
+# matplotlib.use("Agg")
 from matplotlib import pyplot as plt
 
 import os
@@ -187,77 +187,77 @@ class LitPlainMlp(L.LightningModule):
 
         return loss
 
-    # def on_train_epoch_end(self):
+    def on_train_epoch_end(self):
 
-    # if self.test_ds is None:
-    #     print("Skipping testing.")
-    #     return
+        if self.test_ds is None:
+            print("Skipping testing.")
+            return
 
-    # x = torch.from_numpy(self.test_ds.X.astype(np.float32)).cuda()
-    # y = torch.from_numpy(self.test_ds.Y.astype(np.float32)).cuda()
+        x = torch.from_numpy(self.test_ds.X.astype(np.float32)).cuda()
+        y = torch.from_numpy(self.test_ds.Y.astype(np.float32)).cuda()
 
-    # # Do some sneaky testing and logging
+        # Do some sneaky testing and logging
 
-    # y_pred = self.forward(x)
+        y_pred = self.forward(x)
 
-    # loss = nn.functional.mse_loss(y_pred, y).reshape(1)
+        loss = nn.functional.mse_loss(y_pred, y).reshape(1)
 
-    # tensorboard = self.logger.experiment
-    # tensorboard.add_scalars(
-    #     "loss",
-    #     {"val": loss, "train": self.current_train_loss},
-    #     global_step=self.current_epoch,
-    # )
+        tensorboard = self.logger.experiment
+        tensorboard.add_scalars(
+            "loss",
+            {"val": loss, "train": self.current_train_loss},
+            global_step=self.current_epoch,
+        )
 
-    # y_np: np.ndarray = y.numpy(force=True).reshape((-1, 1))
-    # y_pred_np: np.ndarray = y_pred.numpy(force=True).reshape((-1, 1))
+        y_np: np.ndarray = y.numpy(force=True).reshape((-1, 1))
+        y_pred_np: np.ndarray = y_pred.numpy(force=True).reshape((-1, 1))
 
-    # # Filter to only include non-nan values
-    # y_pred_np = y_pred_np[np.isnan(y_np) == False]
-    # y_np = y_np[np.isnan(y_np) == False]
+        # Filter to only include non-nan values
+        y_pred_np = y_pred_np[np.isnan(y_np) == False]
+        y_np = y_np[np.isnan(y_np) == False]
 
-    # if np.isnan(y_np).any():
-    #     print(
-    #         f"Labels contain {np.isnan(y_np).sum()} null values ({np.isnan(y_np).sum()/y_np.size*100:.2f}%)!"
-    #     )
-    #     print(
-    #         f"Labels contain {y_np.size-np.isnan(y_np).sum()} null values ({(y_np.size-np.isnan(y_np).sum())/y_np.size*100:.2f}%)!"
-    #     )
-    #     r2 = -1.0
-    # elif np.isnan(y_pred_np).any():
-    #     print(f"Predictions contain {np.isnan(y_pred_np).sum()} null values!")
-    #     r2 = -1.0
-    # else:
-    #     r2 = rsquared(y_np, y_pred_np)
+        if np.isnan(y_np).any():
+            print(
+                f"Labels contain {np.isnan(y_np).sum()} null values ({np.isnan(y_np).sum()/y_np.size*100:.2f}%)!"
+            )
+            print(
+                f"Labels contain {y_np.size-np.isnan(y_np).sum()} null values ({(y_np.size-np.isnan(y_np).sum())/y_np.size*100:.2f}%)!"
+            )
+            r2 = -1.0
+        elif np.isnan(y_pred_np).any():
+            print(f"Predictions contain {np.isnan(y_pred_np).sum()} null values!")
+            r2 = -1.0
+        else:
+            r2 = rsquared(y_np, y_pred_np)
 
-    # # test_pd = pd.DataFrame(
-    # #     np.hstack((y_np, y_pred_np)), columns=["y_true", "y_pred"]
-    # # )
-    # # test_pd.to_csv(f"test_results_{batch_idx}.csv")
+        # test_pd = pd.DataFrame(
+        #     np.hstack((y_np, y_pred_np)), columns=["y_true", "y_pred"]
+        # )
+        # test_pd.to_csv(f"test_results_{batch_idx}.csv")
 
-    # ax = plt.subplot()
-    # ax.scatter(y_np, y_pred_np)
-    # ax.plot([y_np.min(), y_np.max()], [y_np.min(), y_np.max()], c="red")
-    # ax.set_title(f"Real versus predicted results, epoch {self.current_epoch}")
-    # ax.set_xlabel("Real")
-    # ax.set_ylabel("Predicted")
+        ax = plt.subplot()
+        ax.scatter(y_np, y_pred_np)
+        ax.plot([y_np.min(), y_np.max()], [y_np.min(), y_np.max()], c="red")
+        ax.set_title(f"Real versus predicted results, epoch {self.current_epoch}")
+        ax.set_xlabel("Real")
+        ax.set_ylabel("Predicted")
 
-    # # Set the plot boundaries and aspect
-    # eps = 1.1  # So that min/max values are not on the edge
-    # ax.set_xlim(y_np.min() * eps, y_np.max() * eps)
-    # ax.set_ylim(y_np.min() * eps, y_np.max() * eps)
-    # ax.set_aspect("equal")
+        # Set the plot boundaries and aspect
+        eps = 1.1  # So that min/max values are not on the edge
+        ax.set_xlim(y_np.min() * eps, y_np.max() * eps)
+        ax.set_ylim(y_np.min() * eps, y_np.max() * eps)
+        ax.set_aspect("equal")
 
-    # if self.current_epoch > 0:
-    #     plt.gcf().savefig(f"version_{self._version}/{self.current_epoch}.png")
+        if self.current_epoch > 0:
+            plt.gcf().savefig(f"version_{self._version}/{self.current_epoch}.png")
 
-    # tensorboard = self.logger.experiment
-    # tensorboard.add_figure(
-    #     "real_vs_pred/test", plt.gcf(), global_step=self.current_epoch
-    # )
+        tensorboard = self.logger.experiment
+        tensorboard.add_figure(
+            "real_vs_pred/test", plt.gcf(), global_step=self.current_epoch
+        )
 
-    # # log the outputs!
-    # self.log("r2/test", r2, prog_bar=True)
+        # log the outputs!
+        self.log("r2/test", r2, prog_bar=True)
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
         x, y = batch
@@ -444,7 +444,7 @@ class MlpAnalyzer(Analyzer):
             max_epochs=max_train_epochs,
             callbacks=[
                 EarlyStopping(
-                    monitor="r2/val", mode="max", patience=50, min_delta=0.01
+                    monitor="r2/val", mode="max", patience=10, min_delta=0.01
                 ),
                 DeviceStatsMonitor(),
                 # StochasticWeightAveraging(swa_lrs=1e-2),
