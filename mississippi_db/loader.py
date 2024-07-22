@@ -72,8 +72,7 @@ def load(
     from_pkl=False,
     take_grad=True,
     n_components=None,
-    n_augmentations=0,
-    seed=64,
+    include_unlabeled=True,
 ) -> tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]:
 
     if from_pkl:
@@ -126,23 +125,98 @@ def load(
 
     before_len = len(dataset)
     dataset = dataset.dropna(axis="index", subset=spectra_column_names)
-    dataset = dataset.dropna(axis="index", subset=labels)
+    if not include_unlabeled:
+        dataset = dataset.dropna(axis="index", subset=labels)
     print(
         f"Dataset length went from {before_len} to {len(dataset)} after dropping nans from spectra"
     )
 
-    print(dataset.head(10))
+    # print(dataset.head(10))
+
+    # # 1. Get list of unique sample IDs
+
+    # sample_ids = dataset.reset_index()["sample_id"].unique()
+
+    # for i in range(10):
+
+    #     # 2. Pick a sample ID at random
+    #     sample_id = np.random.choice(sample_ids)
+    #     # 3. Return all matching rows (should be three)
+    #     spectra = dataset.loc[sample_id, spectra_column_names].iloc[:2]
+    #     if len(spectra) < 2:
+    #         continue
+    #     diff = spectra.values[0] - spectra.values[1]
+    #     # print(spectra)
+    #     # 4. Plot all three.
+    #     spectra.T.plot()
+    #     plt.plot(diff, label="Trial 1 - Trial 2")
+
+    #     # # Generate a similar augmentation
+    #     ampl = 0.04 * random.random()
+
+    #     # normal period is 2pi ~= 6
+    #     # should be 2000
+    #     # x /= 2000?
+    #     freq = random.random()
+    #     shift = random.random() * 2 * np.pi
+
+    #     first_sin = (
+    #         np.sin(freq * np.linspace(0 + shift, 2 * np.pi + shift, spectra.shape[1]))
+    #         * ampl
+    #     )
+    #     plt.plot(first_sin)
+
+    #     total = first_sin
+
+    #     for i in range(100):
+    #         ampl = 0.0004 * random.random()
+
+    #         # normal period is 2pi ~= 6
+    #         # should be 2000
+    #         # x /= 2000?
+    #         freq = random.random() * 10
+    #         shift = random.random() * 2 * np.pi
+    #         second_sin = (
+    #             np.sin(
+    #                 freq * np.linspace(0 + shift, 2 * np.pi + shift, spectra.shape[1])
+    #             )
+    #             * ampl
+    #         )
+    #         # plt.plot(second_sin)
+
+    #         total += second_sin
+
+    #     # Finally, add Gaussian noise
+    #     augmented_spectrum = spectra.values[0]
+    #     noise = np.random.randn(augmented_spectrum.shape[0]) * 1e-4
+
+    #     augmented_spectrum += total + noise
+
+    #     plt.plot(augmented_spectrum)
+
+    #     plt.plot(total, label="Augmentation")
+
+    #     print(second_sin)
+
+    #     plt.legend()
+    #     plt.show()
+    # exit()
 
     # Take average across three trials/scans
     X = dataset.loc[:, spectra_column_names].groupby("sample_id").mean()
     Y = dataset.loc[X.index, labels].groupby("sample_id").mean()
 
+    # X = dataset.loc[:, spectra_column_names]
+    # Y = dataset.loc[X.index, labels]
+    # X = pd.concat([X, X_avg], axis="index")
+    # Y = pd.concat([Y, Y_avg], axis="index")
+
     print(X)
     print(Y)
 
     # Save for unnormalization later
-    original_label_std = Y.std()
-    original_label_mean = Y.mean()
+    original_label_min = Y.min()
+    original_label_max = Y.max()
 
     # Y = Y.values
     if normalize_Y:
@@ -156,21 +230,23 @@ def load(
     print(f"X has {len(np.unique(X.iloc[:,1000]))} unique vals / {len(X)} total")
 
     # Random indices for splitting into train & test
-    indices = np.arange(X.shape[0])
-    np.random.shuffle(indices)
+    sample_ids = dataset.reset_index()["sample_id"].unique()
+    print(sample_ids)
+    print(sample_ids.shape)
+    np.random.shuffle(sample_ids)
 
-    stop_idx = int(X.shape[0] * train_split)
+    stop_idx = int(sample_ids.shape[0] * train_split)
 
-    X_train = X.values[indices[:stop_idx], :]
-    Y_train = Y.values[indices[:stop_idx], :]
+    print(Y)
+    Y_train = Y.loc[sample_ids[:stop_idx], :].values
+    X_train = X.loc[sample_ids[:stop_idx], :].values
 
-    X_test = X.values[indices[stop_idx:], :]
-    Y_test = Y.values[indices[stop_idx:], :]
-    X_train, Y_train = augmentSpectra(X_train, Y_train, reps=n_augmentations)
+    Y_test = Y.loc[sample_ids[stop_idx:], :].values
+    X_test = X.loc[sample_ids[stop_idx:], :].values
 
-    print(indices)
+    # print(indices)
     print(stop_idx)
-    print(len(indices))
+    print(len(sample_ids))
 
     # print(
     #     np.hstack(
@@ -182,7 +258,14 @@ def load(
         f"There are {len(np.unique(np.concatenate((Y_train, Y_test))))} unique values across Y_train, Y_test"
     )
     print(
-        f"Y_train {len(np.intersect1d(Y_train, Y_test))} values common values with Y_train"
+        f"Y_train {len(np.intersect1d(Y_train, Y_test))} values common values with Y_test"
+    )
+
+    print(
+        f"There are about {len(np.unique(np.concatenate((X_train[:,1000], X_test[:,1000]))))} unique values across X_train, X_test"
+    )
+    print(
+        f"X_train has about {len(np.intersect1d(X_train[:,1000], X_test[:,1000]))} common values with X_test"
     )
 
     # TODO: Split file using JSON format
@@ -219,6 +302,6 @@ def load(
     return (
         (X_train, Y_train),
         (X_test, Y_test),
-        original_label_mean,
-        original_label_std,
+        original_label_max,
+        original_label_min,
     )

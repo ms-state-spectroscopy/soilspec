@@ -15,7 +15,7 @@ from tqdm import trange, tqdm
 from analyzers.utils import rsquared
 import matplotlib
 
-# matplotlib.use("Agg")
+matplotlib.use("Agg")
 from matplotlib import pyplot as plt
 
 import os
@@ -186,78 +186,6 @@ class LitPlainMlp(L.LightningModule):
         self.log(f"test_r2", r2)
 
         return loss
-
-    def on_train_epoch_end(self):
-
-        if self.test_ds is None:
-            print("Skipping testing.")
-            return
-
-        x = torch.from_numpy(self.test_ds.X.astype(np.float32)).cuda()
-        y = torch.from_numpy(self.test_ds.Y.astype(np.float32)).cuda()
-
-        # Do some sneaky testing and logging
-
-        y_pred = self.forward(x)
-
-        loss = nn.functional.mse_loss(y_pred, y).reshape(1)
-
-        tensorboard = self.logger.experiment
-        tensorboard.add_scalars(
-            "loss",
-            {"val": loss, "train": self.current_train_loss},
-            global_step=self.current_epoch,
-        )
-
-        y_np: np.ndarray = y.numpy(force=True).reshape((-1, 1))
-        y_pred_np: np.ndarray = y_pred.numpy(force=True).reshape((-1, 1))
-
-        # Filter to only include non-nan values
-        y_pred_np = y_pred_np[np.isnan(y_np) == False]
-        y_np = y_np[np.isnan(y_np) == False]
-
-        if np.isnan(y_np).any():
-            print(
-                f"Labels contain {np.isnan(y_np).sum()} null values ({np.isnan(y_np).sum()/y_np.size*100:.2f}%)!"
-            )
-            print(
-                f"Labels contain {y_np.size-np.isnan(y_np).sum()} null values ({(y_np.size-np.isnan(y_np).sum())/y_np.size*100:.2f}%)!"
-            )
-            r2 = -1.0
-        elif np.isnan(y_pred_np).any():
-            print(f"Predictions contain {np.isnan(y_pred_np).sum()} null values!")
-            r2 = -1.0
-        else:
-            r2 = rsquared(y_np, y_pred_np)
-
-        # test_pd = pd.DataFrame(
-        #     np.hstack((y_np, y_pred_np)), columns=["y_true", "y_pred"]
-        # )
-        # test_pd.to_csv(f"test_results_{batch_idx}.csv")
-
-        ax = plt.subplot()
-        ax.scatter(y_np, y_pred_np)
-        ax.plot([y_np.min(), y_np.max()], [y_np.min(), y_np.max()], c="red")
-        ax.set_title(f"Real versus predicted results, epoch {self.current_epoch}")
-        ax.set_xlabel("Real")
-        ax.set_ylabel("Predicted")
-
-        # Set the plot boundaries and aspect
-        eps = 1.1  # So that min/max values are not on the edge
-        ax.set_xlim(y_np.min() * eps, y_np.max() * eps)
-        ax.set_ylim(y_np.min() * eps, y_np.max() * eps)
-        ax.set_aspect("equal")
-
-        if self.current_epoch > 0:
-            plt.gcf().savefig(f"version_{self._version}/{self.current_epoch}.png")
-
-        tensorboard = self.logger.experiment
-        tensorboard.add_figure(
-            "real_vs_pred/test", plt.gcf(), global_step=self.current_epoch
-        )
-
-        # log the outputs!
-        self.log("r2/test", r2, prog_bar=True)
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
         x, y = batch
@@ -455,7 +383,7 @@ class MlpAnalyzer(Analyzer):
             # profiler="simple",
         )
 
-    def train(self, X_train, Y_train, X_test=None, Y_test=None):
+    def train(self, X_train, Y_train):
 
         dataset = CustomDataset(X_train, Y_train)
         # use 20% of training data for validation
@@ -473,41 +401,7 @@ class MlpAnalyzer(Analyzer):
             val_set, batch_size=valid_set_size, num_workers=19
         )
 
-        if X_test is not None and Y_test is not None:
-            print("Setting test_ds")
-            self.lit_model.test_ds = CustomDataset(X_test, Y_test)
-
-            self.test_dl = data_utils.DataLoader(
-                dataset, batch_size=len(X_test), num_workers=19
-            )
-        else:
-            print(X_test, Y_test)
-
         self.trainer.fit(self.lit_model, train_loader, val_loader)
-
-    def hypertune(self):
-        # Create a Tuner
-        tuner = Tuner(self.trainer)
-
-        # finds learning rate automatically
-        # sets hparams.lr or hparams.learning_rate to that learning rate
-        lr_finder = tuner.lr_find(self.lit_model, early_stop_threshold=None)
-
-        # Plot with
-        fig = lr_finder.plot(suggest=True)
-        fig.show()
-        fig.savefig("lrs.png")
-
-        # Pick point based on plot, or get suggestion
-        new_lr = lr_finder.suggestion()
-
-        print(f"May we suggest: {new_lr}")
-
-        # # update hparams of the model
-        # self.lit_model.hparams.lr = new_lr
-
-        # # Fit model
-        # self.trainer.fit(self.lit_model)
 
     def test(self, X_test, Y_test):
         dataset = CustomDataset(X_test, Y_test)

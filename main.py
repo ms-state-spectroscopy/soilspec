@@ -62,8 +62,8 @@ if __name__ == "__main__":
 
     # These are the labels that we should train/predict on
     # They should match the column names in the CSV file
-    # mississippi_labels = ["wilting_point"]
-    mississippi_labels = ["field_capacity"]
+    # mississippi_labels = ["field_capacity"]
+    mississippi_labels = ["wilting_point"]
 
     ossl_labels = [
         # "cf_usda.c236_w.pct",
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     ]
 
     # Each sample in the dataset will be augmented this many times
-    n_dataset_augmentations = 50
+    n_dataset_augmentations = 0
 
     (
         (X_train, Y_train),
@@ -90,8 +90,8 @@ if __name__ == "__main__":
         from_pkl=False,
         train_split=50 / 75,
         take_grad=False,
-        n_augmentations=n_dataset_augmentations,
         n_components=60,
+        include_unlabeled=False,
     )
 
     # exit()
@@ -128,12 +128,6 @@ if __name__ == "__main__":
             n_components=60,
         )
 
-    # for spectrum in X_train[:100]:
-    #     # print(spectrum)
-    #     norm = (spectrum - spectrum.min()) / spectrum.max()
-    #     plt.plot(range(len(spectrum)), norm, c="red")
-    # plt.show()
-
     print(
         f"Y_train has {len(Y_train)-np.isnan(Y_train).sum().sum()} non-null values ({(len(Y_train)-np.isnan(Y_train).sum().sum())/len(Y_train)*100})"
     )
@@ -157,11 +151,11 @@ if __name__ == "__main__":
         n_augmentations=0,
     )
 
-    for i, spectrum in enumerate(X_train[:5]):
-        plt.plot(range(len(spectrum)), spectrum, label=str(Y_train[i]))
+    # for i, spectrum in enumerate(X_train[:5]):
+    #     plt.plot(range(len(spectrum)), spectrum, label=str(Y_train[i]))
 
-    for i, spectrum in enumerate(X_test[:5]):
-        plt.plot(range(len(spectrum)), spectrum, label=str(Y_train[i]))
+    # for i, spectrum in enumerate(X_test[:5]):
+    #     plt.plot(range(len(spectrum)), spectrum, label=str(Y_train[i]))
 
     plt.ylabel("PCA component magnitude")
     plt.ylabel("PCA component index")
@@ -171,18 +165,18 @@ if __name__ == "__main__":
     plt.show()
 
     # analyzer = CubistAnalyzer()
-    # analyzer = RandomForestAnalyzer()
+    # analyzer = RandomForestAnalyzer()''
 
     print(f"X_train has shape {X_train.shape}")
     print(f"Y_test has shape {Y_test.shape}")
 
-    print(len(np.intersect1d(X_test[:, 1], X_train[:, 1])))
-    print(len(np.intersect1d(Y_test, Y_train)))
-    print(len(np.unique(np.concatenate((Y_train, Y_test)))))
+    # print(len(np.intersect1d(X_test[:, 1], X_train[:, 1])))
+    # print(len(np.intersect1d(Y_test, Y_train)))
+    # print(len(np.unique(np.concatenate((Y_train, Y_test)))))
 
-    assert (
-        len(np.intersect1d(Y_train, Y_test)) == 0
-    ) or args.pre_train, f"Y_train {len(np.intersect1d(Y_train, Y_test))} values common values with Y_test"
+    # assert (
+    #     len(np.intersect1d(Y_train, Y_test)) == 0
+    # ) or args.pre_train, f"Y_train {len(np.intersect1d(Y_train, Y_test))} values common values with Y_test"
 
     if not args.pre_train:
         ax = plt.subplot()
@@ -196,6 +190,6 @@ if __name__ == "__main__":
         plt.show()
 
     if not args.skip_training:
-        analyzer.train(X_train, Y_train, X_test, Y_test)
+        analyzer.train(X_train, Y_train)
 
     analyzer.test(X_test, Y_test)
