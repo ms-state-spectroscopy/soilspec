@@ -82,7 +82,7 @@ ossl_labels = [
 
 class LitModel(L.LightningModule):
     def __init__(
-        self, input_dim: int, hidden_size: int, output_dim: int, p: float = 0.2
+        self, input_dim: int, hidden_size: int, output_dim: int, pca, p: float = 0.2
     ):
         super().__init__()
 
@@ -122,11 +122,10 @@ class LitModel(L.LightningModule):
 
         if self.training:
             noise = torch.zeros_like(x)
-            noise.normal_(0, std=1e-4)
+            noise.normal_(0, std=1e-2)
             scale = torch.rand(1).cuda() + 0.5
             noisy_x = x * scale + noise.cuda()
             y_pred = self.head(torch.cat((noisy_x, backbone_y), dim=-1))
-
         else:
             y_pred = self.head(torch.cat((x, backbone_y), dim=-1))
         # print(torch.cat((x, backbone_y), dim=-1))
@@ -332,10 +331,14 @@ class LitModel(L.LightningModule):
 
 
 if __name__ == "__main__":
+    pca = PCA(n_components=120)
+    pca.fit(np.vstack((X_train, X_val)))
+
     model = LitModel(
         input_dim=X_train.shape[-1],
         hidden_size=200,
         output_dim=len(mississippi_labels),
+        pca=pca,
         p=0.5,
     )
 
