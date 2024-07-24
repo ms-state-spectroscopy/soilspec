@@ -14,8 +14,11 @@ class RandomForestAnalyzer(Analyzer):
         super().__init__()
         self.regressor = RandomForestRegressor(verbose=2, n_jobs=10)
 
-    def fit(self, X, Y):
+    def train(self, X, Y):
         self.regressor.fit(X, Y)
+
+    def test(self, X, Y):
+        return self.regressor.score(X, Y)
 
     def predict(self, X):
         return self.regressor.predict(X)

@@ -1,4 +1,6 @@
 from tqdm import trange
+from analyzers.analyzer import RandomForestAnalyzer
+from analyzers.cubist import CubistAnalyzer
 import analyzers.utils as utils
 import lightning as L
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
@@ -102,15 +104,19 @@ class LitModel(L.LightningModule):
         )
 
         self.head = nn.Sequential(
+            # Layer 1
             nn.Linear(input_dim + backbone_output_size, hidden_size),
             nn.LeakyReLU(),
             nn.Dropout(p),
+            # Layer 2
             nn.Linear(hidden_size, hidden_size),
             nn.LeakyReLU(),
             nn.Dropout(p),
+            # Layer 3
             nn.Linear(hidden_size, hidden_size),
             nn.LeakyReLU(),
             nn.Dropout(p),
+            # Output
             nn.Linear(hidden_size, output_dim),
         )
         self.current_train_loss = 0.0
@@ -361,6 +367,16 @@ if __name__ == "__main__":
     for param in model.backbone.parameters():
         param.requires_grad = False
     # exit()
+
+    X_train = pca.transform(X_train)
+    X_val = pca.transform(X_val)
+    analyzer = CubistAnalyzer()
+    # analyzer = RandomForestAnalyzer()
+    analyzer.train(X_train, Y_train)
+    r2 = analyzer.test(X_val, Y_val)
+    print(r2)
+
+    exit()
 
     trainer = L.Trainer(
         callbacks=[
