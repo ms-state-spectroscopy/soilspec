@@ -16,9 +16,11 @@ import pandas as pd
 from sklearn.decomposition import PCA
 from analyzers.cubist import CubistAnalyzer
 from analyzers.rf import RandomForestAnalyzer
+from analyzers.two_part_mlp import TwoPartAnalyzer
 import mississippi_db
 import mississippi_db.loader
 import ossl_db.loader
+
 
 # import neospectra
 # import pickle
@@ -141,7 +143,7 @@ if __name__ == "__main__":
     )
 
     # TODO: K-fold cross val
-    analyzer = MlpAnalyzer(
+    analyzer = TwoPartAnalyzer(
         output_size=len(ossl_labels if args.pre_train else mississippi_labels),
         lr=1e-4,
         hidden_size=200,

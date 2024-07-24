@@ -320,6 +320,15 @@ def plotSpectraFromSet(df: pd.DataFrame, n=1, indices=None, show=True):
         plt.show()
 
 
+def plotSpectraFromNumpy(arr: np.ndarray, n=1, indices=None, show=True):
+    arr = np.random.permutation(arr)
+
+    for i in range(n):
+        plt.plot(arr[i])
+
+    plt.show()
+
+
 def seedEverything(seed: int = 64):
     """Seeds pseudorandomness in PyTorch, Numpy, and Python's `random` module."""
     L.seed_everything(64)

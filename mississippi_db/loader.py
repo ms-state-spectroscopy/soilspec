@@ -203,11 +203,11 @@ def load(
     # exit()
 
     # Take average across three trials/scans
-    X = dataset.loc[:, spectra_column_names].groupby("sample_id").mean()
-    Y = dataset.loc[X.index, labels].groupby("sample_id").mean()
+    # X = dataset.loc[:, spectra_column_names].groupby("sample_id").mean()
+    # Y = dataset.loc[X.index, labels].groupby("sample_id").mean()
 
-    # X = dataset.loc[:, spectra_column_names]
-    # Y = dataset.loc[X.index, labels]
+    X = dataset.loc[:, spectra_column_names]
+    Y = dataset.loc[X.index, labels]
     # X = pd.concat([X, X_avg], axis="index")
     # Y = pd.concat([Y, Y_avg], axis="index")
 

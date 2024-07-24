@@ -40,7 +40,7 @@ import contextlib
 
 
 # define the LightningModule
-class LitPlainMlp(L.LightningModule):
+class LitMlp(L.LightningModule):
     def __init__(
         self,
         lr=1e-4,
@@ -316,7 +316,7 @@ class LitPlainMlp(L.LightningModule):
         return optimizer
 
 
-class MlpAnalyzer(Analyzer):
+class TwoPartAnalyzer(Analyzer):
     def __init__(
         self,
         output_size,
@@ -335,7 +335,7 @@ class MlpAnalyzer(Analyzer):
         self.hidden_size = hidden_size
         self.batch_size = batch_size
 
-        self.lit_model = LitPlainMlp(
+        self.lit_model = LitMlp(
             input_dim=input_size,
             hidden_size=hidden_size,
             lr=lr,
@@ -372,7 +372,7 @@ class MlpAnalyzer(Analyzer):
             max_epochs=max_train_epochs,
             callbacks=[
                 EarlyStopping(
-                    monitor="r2/val", mode="max", patience=100, min_delta=0.01
+                    monitor="r2/val", mode="max", patience=10, min_delta=0.01
                 ),
                 DeviceStatsMonitor(),
                 # StochasticWeightAveraging(swa_lrs=1e-2),

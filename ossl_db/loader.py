@@ -28,7 +28,7 @@ def load(
     include_unlabeled=True,
     take_grad=True,
     n_components=None,
-) -> tuple[tuple[pd.DataFrame, pd.DataFrame], tuple[pd.DataFrame, pd.DataFrame]]:
+):
     """Load the averaged NIR samples from the Neospectra dataset
 
     Args:
@@ -124,11 +124,14 @@ def load(
     # Save for unnormalization later
     if normalize_Y:
         Y = dataset.loc[:, labels]
-        original_label_std = Y.std()
-        original_label_mean = Y.mean()
+
+        if normalize_Y:
+            # Normalize
+            Y -= Y.min()
+            Y /= Y.max()
 
         # Normalize
-        dataset.loc[:, labels] = (Y - Y.mean()) / Y.std()
+        dataset.loc[:, labels] = Y
 
         if include_unlabeled:
             labeled_dataset = dataset.dropna(axis="index", subset=labels)
@@ -159,8 +162,8 @@ def load(
             axis=1
         ).reshape(-1, 1)
 
+    pca = PCA(n_components=n_components)
     if n_components is not None:
-        pca = PCA(n_components=n_components)
         pca.fit(np.vstack((X_train, X_test)))
 
         X_train = pca.transform(X_train)
@@ -182,4 +185,5 @@ def load(
         (X_test, Y_test),
         original_label_min,
         original_label_max,
+        pca,
     )
