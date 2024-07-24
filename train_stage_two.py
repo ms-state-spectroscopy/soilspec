@@ -72,7 +72,7 @@ ossl_labels = [
     labels=mississippi_labels,
     normalize_Y=True,
     from_pkl=False,
-    train_split=185 / 225,
+    train_split=100 / 225,
     take_grad=False,
     n_components=None,
     include_unlabeled=False,
@@ -368,15 +368,15 @@ if __name__ == "__main__":
         param.requires_grad = False
     # exit()
 
-    X_train = pca.transform(X_train)
-    X_val = pca.transform(X_val)
-    analyzer = CubistAnalyzer()
-    # analyzer = RandomForestAnalyzer()
-    analyzer.train(X_train, Y_train)
-    r2 = analyzer.test(X_val, Y_val)
-    print(r2)
+    # X_train = pca.transform(X_train)
+    # X_val = pca.transform(X_val)
+    # analyzer = CubistAnalyzer()
+    # # analyzer = RandomForestAnalyzer()
+    # analyzer.train(X_train, Y_train)
+    # r2 = analyzer.test(X_val, Y_val)
+    # print(r2)
 
-    exit()
+    # exit()
 
     trainer = L.Trainer(
         callbacks=[
