@@ -80,6 +80,7 @@ ossl_labels = [
     include_unlabeled=False,
 )
 
+
 # X_train = pca.transform(X_train)
 # X_val = pca.transform(X_val)
 
@@ -416,8 +417,52 @@ if __name__ == "__main__":
         p=0.5,
         original_label_minmax=(original_label_min, original_label_max),
         pca=None,
-        add_contrastive=True,
+        add_contrastive=False,
     )
+
+    clay_model = LitModel(
+        input_dim=1051,
+        hidden_size=200,
+        output_dim=len(mississippi_labels),
+        p=0.5,
+        original_label_minmax=(original_label_min, original_label_max),
+        pca=None,
+        add_contrastive=False,
+    )
+
+    checkpoint = torch.load(
+        "/home/main/soilspec/named_ckpts/ossl_clay/checkpoints/epoch=1959-step=168560.ckpt"
+    )
+    clay_weights = {
+        k.replace("seq", "head"): v for k, v in checkpoint["state_dict"].items()
+    }
+    clay_model.weights = clay_weights
+
+    clay_model.eval()
+    clay_pred = clay_model.forward(torch.from_numpy(X_train).type(torch.float32))
+    print(clay_pred)
+
+    bd_model = LitModel(
+        input_dim=1051,
+        hidden_size=200,
+        output_dim=len(mississippi_labels),
+        p=0.5,
+        original_label_minmax=(original_label_min, original_label_max),
+        pca=None,
+        add_contrastive=False,
+    )
+
+    checkpoint = torch.load(
+        "/home/main/soilspec/named_ckpts/ossl_bd/checkpoints/epoch=1999-step=10000.ckpt"
+    )
+    bd_weights = {
+        k.replace("seq", "head"): v for k, v in checkpoint["state_dict"].items()
+    }
+    bd_model.weights = bd_weights
+
+    bd_model.eval()
+    bd_pred = bd_model.forward(torch.from_numpy(X_train).type(torch.float32))
+    print(bd_pred)
 
     # CKPT_PATH = (
     #     "/home/main/soilspec/named_ckpts/ossl/checkpoints/epoch=499-step=2500.ckpt"
