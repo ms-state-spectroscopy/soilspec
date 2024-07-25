@@ -17,7 +17,8 @@ class RandomForestAnalyzer(Analyzer):
 
     def test(self, X, Y):
         r2 = self.model.score(X, Y)
-        print(f"R2 is {r2}")
+        # print(f"R2 is {r2}")
+        return r2
 
     def predict(self, X: pd.DataFrame):
         return self.model.predict(X)

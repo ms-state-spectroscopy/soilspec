@@ -93,6 +93,8 @@ class LitModel(L.LightningModule):
         p: float = 0.2,
         original_label_minmax=(1.0, 1.0),
         pca: PCA = None,
+        add_contrastive=False,
+        total_epochs=1e3,
     ):
         super().__init__()
 
@@ -128,9 +130,12 @@ class LitModel(L.LightningModule):
             nn.Linear(hidden_size, output_dim),
         )
         self.current_train_loss = 0.0
+        self.current_r2 = 0.0
         self.original_minmax = original_label_minmax
         self.denorm_scale = original_label_minmax[1] - original_label_minmax[0]
         self.pca = pca
+        self.add_contrastive = add_contrastive
+        self.total_epochs = total_epochs
 
     def forward(self, x: torch.Tensor):
 
@@ -174,10 +179,25 @@ class LitModel(L.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_pred = self.forward(x)
-        loss = F.mse_loss(y_pred, y)
+
+        nonnan_indices = torch.logical_not(torch.isnan(y)).any(dim=-1)
+        y_masked = y[nonnan_indices]
+        y_pred_masked = y_pred[nonnan_indices]
+
+        loss = F.mse_loss(y_pred_masked, y_masked)
+
+        # Contrastive loss
+        y_pred_2 = self.forward(x)
+        contrastive_loss = F.mse_loss(y_pred, y_pred_2)
+
+        self.log("loss/contrastive", contrastive_loss, prog_bar=True)
+
+        if self.add_contrastive:
+            loss += (self.current_epoch / self.total_epochs) * contrastive_loss
+
         self.current_train_loss = loss
 
-        self.log("loss/train", loss)
+        self.log("loss/train", loss, prog_bar=False)
         self.log("rmse/train", torch.sqrt(loss) * self.denorm_scale, prog_bar=True)
 
         return loss
@@ -192,7 +212,11 @@ class LitModel(L.LightningModule):
 
         y_pred = self.forward(x)
 
-        loss = nn.functional.mse_loss(y_pred, y)
+        nonnan_indices = torch.logical_not(torch.isnan(y)).any(dim=-1)
+        y_masked = y[nonnan_indices]
+        y_pred_masked = y_pred[nonnan_indices]
+
+        loss = F.mse_loss(y_pred_masked, y_masked)
 
         self.log(f"test_loss", loss)
 
@@ -298,7 +322,11 @@ class LitModel(L.LightningModule):
 
         y_pred = self.forward(x)
 
-        loss = nn.functional.mse_loss(y_pred, y).reshape(1)
+        nonnan_indices = torch.logical_not(torch.isnan(y)).any(dim=-1)
+        y_masked = y[nonnan_indices]
+        y_pred_masked = y_pred[nonnan_indices]
+
+        loss = F.mse_loss(y_pred_masked, y_masked)
 
         tensorboard = self.logger.experiment
         tensorboard.add_scalars(
@@ -361,6 +389,7 @@ class LitModel(L.LightningModule):
 
         # log the outputs!
         self.log("r2/val", r2, prog_bar=True)
+        self.current_r2 = r2
 
         self.log(
             "rmse/val",
@@ -381,12 +410,13 @@ if __name__ == "__main__":
     pca.fit(X_train)
 
     model = LitModel(
-        input_dim=80,
+        input_dim=1051,
         hidden_size=200,
         output_dim=len(mississippi_labels),
         p=0.5,
         original_label_minmax=(original_label_min, original_label_max),
-        pca=pca,
+        pca=None,
+        add_contrastive=True,
     )
 
     # CKPT_PATH = (

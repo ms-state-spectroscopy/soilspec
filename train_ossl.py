@@ -1,6 +1,9 @@
 from tqdm import trange
+from analyzers.cubist import CubistAnalyzer
+from analyzers.rf import RandomForestAnalyzer
 import analyzers.utils as utils
 import lightning as L
+from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 import matplotlib
 
@@ -33,7 +36,7 @@ General steps:
 """
 
 # PARAMS
-BATCH_SIZE = 32
+BATCH_SIZE = 256
 SEED = 64
 
 # 0. Set the seed.
@@ -44,9 +47,9 @@ torch.set_float32_matmul_precision("medium")
 ossl_labels = [
     # "cf_usda.c236_w.pct",
     # "oc_usda.c729_w.pct",
-    "clay.tot_usda.a334_w.pct",
-    "sand.tot_usda.c60_w.pct",
-    "silt.tot_usda.c62_w.pct",
+    # "clay.tot_usda.a334_w.pct",
+    # "sand.tot_usda.c60_w.pct",
+    # "silt.tot_usda.c62_w.pct",
     # "bd_usda.a4_g.cm3",
     "wr.1500kPa_usda.a417_w.pct",
     # "awc.33.1500kPa_usda.c80_w.frac",
@@ -63,7 +66,19 @@ ossl_labels = [
     )
 )
 
-pca: PCA
+# pca: PCA
+
+# Build a Cubist model for WR prediction
+# analyzer = CubistAnalyzer(neighbors=None)
+# analyzer.train(X_train, Y_train)
+# r2 = analyzer.test(X_val, Y_val)
+# print(r2)
+
+# analyzer = RandomForestAnalyzer(verbose=1)
+# analyzer.train(X_train, Y_train)
+# r2 = analyzer.test(X_val, Y_val)
+# print(r2)
+# exit()
 
 
 class LitModel(L.LightningModule):
@@ -278,20 +293,24 @@ class LitModel(L.LightningModule):
 
 
 if __name__ == "__main__":
+
+    checkpoint_callback = ModelCheckpoint(monitor="r2/val", mode="max", verbose=True)
+
     model = LitModel(
-        input_dim=X_train.shape[-1], hidden_size=400, output_dim=len(ossl_labels), p=0.2
+        input_dim=X_train.shape[-1], hidden_size=200, output_dim=len(ossl_labels), p=0.2
     )
 
-    model = LitModel.load_from_checkpoint(
-        "/home/main/soilspec/lightning_logs/version_11/checkpoints/epoch=1159-step=10440.ckpt",
-        input_dim=X_train.shape[-1],
-        hidden_size=400,
-        output_dim=len(ossl_labels),
-        p=0.2,
-    )
+    # model = LitModel.load_from_checkpoint(
+    #     "/home/main/soilspec/lightning_logs/version_11/checkpoints/epoch=1159-step=10440.ckpt",
+    #     input_dim=X_train.shape[-1],
+    #     hidden_size=400,
+    #     output_dim=len(ossl_labels),
+    #     p=0.2,
+    # )
     trainer = L.Trainer(
         callbacks=[
             EarlyStopping(monitor="r2/val", mode="max", patience=100, min_delta=0.01),
+            checkpoint_callback,
             # StochasticWeightAveraging(swa_lrs=1e-2),
         ],
         check_val_every_n_epoch=20,
