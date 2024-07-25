@@ -408,17 +408,6 @@ class LitModel(L.LightningModule):
 
 if __name__ == "__main__":
     pca = PCA(n_components=80)
-    pca.fit(X_train)
-
-    model = LitModel(
-        input_dim=1051,
-        hidden_size=200,
-        output_dim=len(mississippi_labels),
-        p=0.5,
-        original_label_minmax=(original_label_min, original_label_max),
-        pca=None,
-        add_contrastive=False,
-    )
 
     clay_model = LitModel(
         input_dim=1051,
@@ -464,6 +453,32 @@ if __name__ == "__main__":
     bd_pred = bd_model.forward(torch.from_numpy(X_train).type(torch.float32))
     print(bd_pred)
 
+    bd_pred_test = bd_model.forward(torch.from_numpy(X_val).type(torch.float32))
+    print(bd_pred_test)
+    clay_pred_test = clay_model.forward(torch.from_numpy(X_val).type(torch.float32))
+    print(clay_pred_test)
+
+    print(X_train.shape)
+    X_train = np.hstack(
+        (X_train, bd_pred.numpy(force=True), clay_pred.numpy(force=True))
+    )
+
+    X_val = np.hstack(
+        (X_val, bd_pred_test.numpy(force=True), clay_pred_test.numpy(force=True))
+    )
+    print(X_train.shape)
+
+    pca.fit(X_train)
+
+    model = LitModel(
+        input_dim=80,
+        hidden_size=200,
+        output_dim=len(mississippi_labels),
+        p=0.5,
+        original_label_minmax=(original_label_min, original_label_max),
+        pca=pca,
+        add_contrastive=False,
+    )
     # CKPT_PATH = (
     #     "/home/main/soilspec/named_ckpts/ossl/checkpoints/epoch=499-step=2500.ckpt"
     # )
