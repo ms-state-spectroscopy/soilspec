@@ -252,7 +252,7 @@ class LitModel(L.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-5)
         return optimizer
 
     def test_step(self, batch, batch_idx):
@@ -524,10 +524,10 @@ if __name__ == "__main__":
         output_dim=len(mississippi_labels),
         p=0.5,
         original_label_minmax=(original_label_min, original_label_max),
-        pca=pca,
-        add_contrastive=False,
+        pca=None,
+        add_contrastive=True,
         augment=True,
-        fcn=False,
+        fcn=False, # Use an FCN or a CNN
     )
     # CKPT_PATH = (
     #     "/home/main/soilspec/named_ckpts/ossl/checkpoints/epoch=499-step=2500.ckpt"
