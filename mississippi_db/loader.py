@@ -215,8 +215,8 @@ def load(
     print(Y)
 
     # Save for unnormalization later
-    original_label_min = Y.min()
-    original_label_max = Y.max()
+    original_label_min = Y.min().item()
+    original_label_max = Y.max().item()
 
     # Y = Y.values
     if normalize_Y:

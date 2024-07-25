@@ -1,8 +1,10 @@
+from turtle import xcor
 from tqdm import trange
 from analyzers.analyzer import RandomForestAnalyzer
 from analyzers.cubist import CubistAnalyzer
 import analyzers.utils as utils
 import lightning as L
+from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 import matplotlib
 
@@ -66,8 +68,8 @@ ossl_labels = [
 (
     (X_train, Y_train),
     (X_val, Y_val),
-    original_label_mean,
-    original_label_std,
+    original_label_max,
+    original_label_min,
 ) = mississippi_db.loader.load(
     labels=mississippi_labels,
     normalize_Y=True,
@@ -84,7 +86,13 @@ ossl_labels = [
 
 class LitModel(L.LightningModule):
     def __init__(
-        self, input_dim: int, hidden_size: int, output_dim: int, pca, p: float = 0.2
+        self,
+        input_dim: int,
+        hidden_size: int,
+        output_dim: int,
+        p: float = 0.2,
+        original_label_minmax=(1.0, 1.0),
+        pca: PCA = None,
     ):
         super().__init__()
 
@@ -105,7 +113,7 @@ class LitModel(L.LightningModule):
 
         self.head = nn.Sequential(
             # Layer 1
-            nn.Linear(input_dim + backbone_output_size, hidden_size),
+            nn.Linear(input_dim, hidden_size),
             nn.LeakyReLU(),
             nn.Dropout(p),
             # Layer 2
@@ -120,9 +128,20 @@ class LitModel(L.LightningModule):
             nn.Linear(hidden_size, output_dim),
         )
         self.current_train_loss = 0.0
+        self.original_minmax = original_label_minmax
+        self.denorm_scale = original_label_minmax[1] - original_label_minmax[0]
+        self.pca = pca
 
-    def forward(self, x):
-        backbone_y: torch.Tensor = self.backbone(x)  # sand, silt, clay, wr
+    def forward(self, x: torch.Tensor):
+
+        if self.pca is not None:
+            compressed_x = self.pca.transform(x.numpy(force=True))
+            compressed_x = torch.from_numpy(compressed_x).type(torch.float32).cuda()
+            backbone_y: torch.Tensor = self.backbone(
+                compressed_x
+            )  # sand, silt, clay, wr
+        else:
+            backbone_y = self.backbone(x)
         # print(f"X has shape {x.shape}")
         # print(backbone_y.numpy(force=True))
 
@@ -131,9 +150,21 @@ class LitModel(L.LightningModule):
             noise.normal_(0, std=1e-2)
             scale = torch.rand(1).cuda() + 0.5
             noisy_x = x * scale + noise.cuda()
-            y_pred = self.head(torch.cat((noisy_x, backbone_y), dim=-1))
+
+            if self.pca is not None:
+                x = self.pca.transform(noisy_x.numpy(force=True))
+                x = torch.from_numpy(x).type(torch.float32).cuda()
+                y_pred = self.head(x)
+            else:
+                y_pred = self.head(noisy_x)
+
         else:
-            y_pred = self.head(torch.cat((x, backbone_y), dim=-1))
+
+            if self.pca is not None:
+                x = self.pca.transform(x.numpy(force=True))
+                x = torch.from_numpy(x).type(torch.float32).cuda()
+
+            y_pred = self.head(x)
         # print(torch.cat((x, backbone_y), dim=-1))
         # print(torch.cat((x, backbone_y), dim=-1).shape)
         # print("EQUALS")
@@ -146,7 +177,8 @@ class LitModel(L.LightningModule):
         loss = F.mse_loss(y_pred, y)
         self.current_train_loss = loss
 
-        self.log("loss/train", loss, prog_bar=True)
+        self.log("loss/train", loss)
+        self.log("rmse/train", torch.sqrt(loss) * self.denorm_scale, prog_bar=True)
 
         return loss
 
@@ -214,6 +246,8 @@ class LitModel(L.LightningModule):
         plt.show()
 
         self.log(f"test_r2", r2)
+
+        self.log("rmse/test", torch.sqrt(loss) * self.denorm_scale)
 
         return loss
 
@@ -328,6 +362,12 @@ class LitModel(L.LightningModule):
         # log the outputs!
         self.log("r2/val", r2, prog_bar=True)
 
+        self.log(
+            "rmse/val",
+            torch.sqrt(loss) * self.denorm_scale,
+            prog_bar=True,
+        )
+
         return loss
 
     def predict_step(self, batch, batch_idx):
@@ -337,15 +377,16 @@ class LitModel(L.LightningModule):
 
 
 if __name__ == "__main__":
-    pca = PCA(n_components=120)
-    pca.fit(np.vstack((X_train, X_val)))
+    pca = PCA(n_components=80)
+    pca.fit(X_train)
 
     model = LitModel(
-        input_dim=X_train.shape[-1],
+        input_dim=1051,
         hidden_size=200,
         output_dim=len(mississippi_labels),
-        pca=pca,
         p=0.5,
+        original_label_minmax=(original_label_min, original_label_max),
+        pca=None,
     )
 
     # CKPT_PATH = (
@@ -377,10 +418,12 @@ if __name__ == "__main__":
     # print(r2)
 
     # exit()
+    checkpoint_callback = ModelCheckpoint(monitor="rmse/val", mode="min", verbose=True)
 
     trainer = L.Trainer(
         callbacks=[
-            EarlyStopping(monitor="r2/val", mode="max", patience=100, min_delta=0.01),
+            EarlyStopping(monitor="rmse/val", mode="min", patience=100, min_delta=0.01),
+            checkpoint_callback,
             # StochasticWeightAveraging(swa_lrs=1e-2),
         ],
         check_val_every_n_epoch=20,
