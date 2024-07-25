@@ -1,3 +1,5 @@
+from math import sin
+import random
 from turtle import xcor
 from tqdm import trange
 from analyzers.analyzer import RandomForestAnalyzer
@@ -20,6 +22,7 @@ from scipy.stats import zscore
 from sklearn.decomposition import PCA
 import torch
 import torch.nn as nn
+from torch.nn import BatchNorm1d
 import torch.nn.functional as F
 import torch.utils.data as data_utils
 
@@ -96,40 +99,51 @@ class LitModel(L.LightningModule):
         pca: PCA = None,
         add_contrastive=False,
         total_epochs=1e3,
+        augment=True,
+        fcn=True,
     ):
         super().__init__()
 
-        backbone_output_size = 4  # sand, silt, clay, wr
+        if fcn:
+            self.head = nn.Sequential(
+                # Layer 1
+                nn.Linear(input_dim, hidden_size),
+                nn.LeakyReLU(),
+                nn.Dropout(p),
+                # Layer 2
+                nn.Linear(hidden_size, hidden_size),
+                nn.LeakyReLU(),
+                nn.Dropout(p),
+                # Layer 3
+                nn.Linear(hidden_size, hidden_size),
+                nn.LeakyReLU(),
+                nn.Dropout(p),
+                # Output
+                nn.Linear(hidden_size, output_dim),
+            )
+        else:
+            self.head = nn.Sequential(
+                # Layer 1
+                nn.Conv1d(1, 32, 3, 2),
+                nn.BatchNorm1d(32),
+                nn.LeakyReLU(),
+                # Layer 2
+                nn.Conv1d(32, 64, 3, 2),
+                nn.BatchNorm1d(32),
+                nn.LeakyReLU(),
+                # Layer 3
+                nn.Conv1d(64, 128, 3, 2),
+                nn.BatchNorm1d(32),
+                nn.LeakyReLU(),
+                # Layer 4
+                nn.Conv1d(128, 256, 3, 2),
+                nn.BatchNorm1d(32),
+                nn.LeakyReLU(),
+                # Output
+                nn.Flatten(),
+                nn.Linear(hidden_size, output_dim),
+            )
 
-        # self.backbone = nn.Sequential(
-        #     nn.Linear(input_dim, hidden_size),
-        #     nn.LeakyReLU(),
-        #     nn.Dropout(p),
-        #     nn.Linear(hidden_size, hidden_size),
-        #     nn.LeakyReLU(),
-        #     nn.Dropout(p),
-        #     nn.Linear(hidden_size, hidden_size),
-        #     nn.LeakyReLU(),
-        #     nn.Dropout(p),
-        #     nn.Linear(hidden_size, backbone_output_size),
-        # )
-
-        self.head = nn.Sequential(
-            # Layer 1
-            nn.Linear(input_dim, hidden_size),
-            nn.LeakyReLU(),
-            nn.Dropout(p),
-            # Layer 2
-            nn.Linear(hidden_size, hidden_size),
-            nn.LeakyReLU(),
-            nn.Dropout(p),
-            # Layer 3
-            nn.Linear(hidden_size, hidden_size),
-            nn.LeakyReLU(),
-            nn.Dropout(p),
-            # Output
-            nn.Linear(hidden_size, output_dim),
-        )
         self.current_train_loss = 0.0
         self.current_r2 = 0.0
         self.original_minmax = original_label_minmax
@@ -137,6 +151,8 @@ class LitModel(L.LightningModule):
         self.pca = pca
         self.add_contrastive = add_contrastive
         self.total_epochs = total_epochs
+        self.augment = augment
+        self.fcn = fcn
 
     def forward(self, x: torch.Tensor):
 
@@ -155,7 +171,31 @@ class LitModel(L.LightningModule):
             noise = torch.zeros_like(x)
             noise.normal_(0, std=1e-2)
             scale = torch.rand(1).cuda() + 0.5
-            noisy_x = x * scale + noise.cuda()
+
+            # Generate Perlin noise
+            factor_1 = (random.random() - 0.5) * 10
+            factor_pi = (random.random() - 0.5) * 10
+            factor_e = (random.random() - 0.5) * 10
+            scale_1 = (random.random() - 0.5) * 10
+            scale_pi = (random.random() - 0.5) * 10
+            scale_e = (random.random() - 0.5) * 10
+            factor_total = random.random() / 100
+
+            u = np.linspace(0, 10, x.shape[-1])
+            perlin = factor_total * (
+                factor_1 * np.sin(scale_1 * u)
+                + factor_e * np.sin(scale_e * u)
+                + factor_pi * np.sin(scale_pi * u)
+            )
+            # plt.plot(perlin)
+            # plt.show()
+
+            if self.augment:
+                noise += torch.from_numpy(perlin).type(torch.float32).cuda()
+                noise[:, :-2] = 0.0
+                noisy_x = x * scale + noise.cuda()
+            else:
+                noisy_x = x
 
             if self.pca is not None:
                 x = self.pca.transform(noisy_x.numpy(force=True))
@@ -471,13 +511,15 @@ if __name__ == "__main__":
     pca.fit(X_train)
 
     model = LitModel(
-        input_dim=80,
+        input_dim=1053,
         hidden_size=200,
         output_dim=len(mississippi_labels),
         p=0.5,
         original_label_minmax=(original_label_min, original_label_max),
-        pca=pca,
+        pca=None,
         add_contrastive=False,
+        augment=True,
+        fcn=False,
     )
     # CKPT_PATH = (
     #     "/home/main/soilspec/named_ckpts/ossl/checkpoints/epoch=499-step=2500.ckpt"
