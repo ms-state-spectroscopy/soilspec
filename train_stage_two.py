@@ -125,23 +125,23 @@ class LitModel(L.LightningModule):
             self.head = nn.Sequential(
                 # Layer 1
                 nn.Conv1d(1, 32, 3, 2),
-                nn.BatchNorm1d(32),
+                nn.MaxPool1d(3, 2, 1),
                 nn.LeakyReLU(),
                 # Layer 2
                 nn.Conv1d(32, 64, 3, 2),
-                nn.BatchNorm1d(32),
+                nn.MaxPool1d(3, 2, 1),
                 nn.LeakyReLU(),
                 # Layer 3
                 nn.Conv1d(64, 128, 3, 2),
-                nn.BatchNorm1d(32),
+                nn.MaxPool1d(3, 2, 1),
                 nn.LeakyReLU(),
                 # Layer 4
-                nn.Conv1d(128, 256, 3, 2),
-                nn.BatchNorm1d(32),
-                nn.LeakyReLU(),
+                # nn.Conv1d(128, 256, 3, 2),
+                # nn.BatchNorm1d(256),
+                # nn.LeakyReLU(),
                 # Output
                 nn.Flatten(),
-                nn.Linear(hidden_size, output_dim),
+                nn.Linear(2048, output_dim),
             )
 
         self.current_train_loss = 0.0
@@ -200,8 +200,13 @@ class LitModel(L.LightningModule):
             if self.pca is not None:
                 x = self.pca.transform(noisy_x.numpy(force=True))
                 x = torch.from_numpy(x).type(torch.float32).cuda()
+
+                if not self.fcn:
+                    x = x[:, None, :]
                 y_pred = self.head(x)
             else:
+                if not self.fcn:
+                    noisy_x = noisy_x[:, None, :]
                 y_pred = self.head(noisy_x)
 
         else:
@@ -209,6 +214,9 @@ class LitModel(L.LightningModule):
             if self.pca is not None:
                 x = self.pca.transform(x.numpy(force=True))
                 x = torch.from_numpy(x).type(torch.float32).cuda()
+
+            if not self.fcn:
+                x = x[:, None, :]
 
             y_pred = self.head(x)
         # print(torch.cat((x, backbone_y), dim=-1))
@@ -516,7 +524,7 @@ if __name__ == "__main__":
         output_dim=len(mississippi_labels),
         p=0.5,
         original_label_minmax=(original_label_min, original_label_max),
-        pca=None,
+        pca=pca,
         add_contrastive=False,
         augment=True,
         fcn=False,
