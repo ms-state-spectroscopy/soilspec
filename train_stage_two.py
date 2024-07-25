@@ -1,8 +1,9 @@
 from math import sin
 import random
 from turtle import xcor
+from cubist import Cubist
 from tqdm import trange
-from analyzers.analyzer import RandomForestAnalyzer
+from analyzers.rf import RandomForestAnalyzer
 from analyzers.cubist import CubistAnalyzer
 import analyzers.utils as utils
 import lightning as L
@@ -252,7 +253,7 @@ class LitModel(L.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-5)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
         return optimizer
 
     def test_step(self, batch, batch_idx):
@@ -507,27 +508,53 @@ if __name__ == "__main__":
     print(clay_pred_test)
 
     print(X_train.shape)
-    X_train = np.hstack(
-        (X_train, bd_pred.numpy(force=True), clay_pred.numpy(force=True))
-    )
+    # X_train = np.hstack(
+    #     (X_train, bd_pred.numpy(force=True), clay_pred.numpy(force=True))
+    # )
 
-    X_val = np.hstack(
-        (X_val, bd_pred_test.numpy(force=True), clay_pred_test.numpy(force=True))
-    )
-    print(X_train.shape)
+    # X_val = np.hstack(
+    #     (X_val, bd_pred_test.numpy(force=True), clay_pred_test.numpy(force=True))
+    # )
+    # print(X_train.shape)
 
     pca.fit(X_train)
 
+    denorm_scale = original_label_max - original_label_min
+
+    # Uncomment these blocks to test Cubist and RF baselines
+    # analyzer = CubistAnalyzer()
+    # analyzer.train(X_train, Y_train)
+    # r2, rmse = analyzer.test(X_val, Y_val)
+    # print(r2, rmse * denorm_scale)
+
+    # analyzer = RandomForestAnalyzer()
+    # analyzer.train(X_train, Y_train)
+    # r2, rmse = analyzer.test(X_val, Y_val)
+    # print(r2, rmse * denorm_scale)
+
+    # X_train = pca.transform(X_train)
+    # X_val = pca.transform(X_val)
+
+    # analyzer = CubistAnalyzer()
+    # analyzer.train(X_train, Y_train)
+    # r2, rmse = analyzer.test(X_val, Y_val)
+    # print(r2, rmse * denorm_scale)
+
+    # analyzer = RandomForestAnalyzer()
+    # analyzer.train(X_train, Y_train)
+    # r2, rmse = analyzer.test(X_val, Y_val)
+    # print(r2, rmse * denorm_scale)
+
     model = LitModel(
-        input_dim=1053,
+        input_dim=80,
         hidden_size=200,
         output_dim=len(mississippi_labels),
         p=0.5,
         original_label_minmax=(original_label_min, original_label_max),
-        pca=None,
+        pca=pca,
         add_contrastive=False,
         augment=True,
-        fcn=False, # Use an FCN or a CNN
+        fcn=True,  # Use an FCN or a CNN
     )
     # CKPT_PATH = (
     #     "/home/main/soilspec/named_ckpts/ossl/checkpoints/epoch=499-step=2500.ckpt"

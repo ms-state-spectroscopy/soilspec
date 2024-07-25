@@ -5,6 +5,7 @@ from sklearn.decomposition import PCA
 
 from cubist import Cubist
 from halo import Halo
+import numpy as np
 
 
 class CubistAnalyzer(Analyzer):
@@ -37,6 +38,13 @@ class CubistAnalyzer(Analyzer):
         with Halo(f"Scoring Cubist model on {len(Y)} samples"):
             # X_reduced = self.pca.transform(X)
             r2 = self.model.score(X, Y)
+
+            y_pred = self.model.predict(X)
+            mse = np.mean((y_pred - Y) ** 2)
+
+            rmse = np.sqrt(mse)
+            # print(f"R2 is {r2}")
+            return r2, rmse
 
         print(f"The R2 of the Cubist model is {r2:.3f}")
         return r2
