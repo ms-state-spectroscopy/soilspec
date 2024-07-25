@@ -525,7 +525,7 @@ if __name__ == "__main__":
         p=0.5,
         original_label_minmax=(original_label_min, original_label_max),
         pca=None,
-        add_contrastive=True,
+        add_contrastive=False,
         augment=True,
         fcn=False, # Use an FCN or a CNN
     )
