@@ -98,18 +98,18 @@ class LitModel(L.LightningModule):
 
         backbone_output_size = 4  # sand, silt, clay, wr
 
-        self.backbone = nn.Sequential(
-            nn.Linear(input_dim, hidden_size),
-            nn.LeakyReLU(),
-            nn.Dropout(p),
-            nn.Linear(hidden_size, hidden_size),
-            nn.LeakyReLU(),
-            nn.Dropout(p),
-            nn.Linear(hidden_size, hidden_size),
-            nn.LeakyReLU(),
-            nn.Dropout(p),
-            nn.Linear(hidden_size, backbone_output_size),
-        )
+        # self.backbone = nn.Sequential(
+        #     nn.Linear(input_dim, hidden_size),
+        #     nn.LeakyReLU(),
+        #     nn.Dropout(p),
+        #     nn.Linear(hidden_size, hidden_size),
+        #     nn.LeakyReLU(),
+        #     nn.Dropout(p),
+        #     nn.Linear(hidden_size, hidden_size),
+        #     nn.LeakyReLU(),
+        #     nn.Dropout(p),
+        #     nn.Linear(hidden_size, backbone_output_size),
+        # )
 
         self.head = nn.Sequential(
             # Layer 1
@@ -134,14 +134,14 @@ class LitModel(L.LightningModule):
 
     def forward(self, x: torch.Tensor):
 
-        if self.pca is not None:
-            compressed_x = self.pca.transform(x.numpy(force=True))
-            compressed_x = torch.from_numpy(compressed_x).type(torch.float32).cuda()
-            backbone_y: torch.Tensor = self.backbone(
-                compressed_x
-            )  # sand, silt, clay, wr
-        else:
-            backbone_y = self.backbone(x)
+        # if self.pca is not None:
+        #     compressed_x = self.pca.transform(x.numpy(force=True))
+        #     compressed_x = torch.from_numpy(compressed_x).type(torch.float32).cuda()
+        #     backbone_y: torch.Tensor = self.backbone(
+        #         compressed_x
+        #     )  # sand, silt, clay, wr
+        # else:
+        #     backbone_y = self.backbone(x)
         # print(f"X has shape {x.shape}")
         # print(backbone_y.numpy(force=True))
 
@@ -381,32 +381,32 @@ if __name__ == "__main__":
     pca.fit(X_train)
 
     model = LitModel(
-        input_dim=1051,
+        input_dim=80,
         hidden_size=200,
         output_dim=len(mississippi_labels),
         p=0.5,
         original_label_minmax=(original_label_min, original_label_max),
-        pca=None,
+        pca=pca,
     )
 
     # CKPT_PATH = (
     #     "/home/main/soilspec/named_ckpts/ossl/checkpoints/epoch=499-step=2500.ckpt"
     # )
 
-    CKPT_PATH = "/home/main/soilspec/named_ckpts/ossl_uncompressed/checkpoints/epoch=1159-step=10440.ckpt"
+    # CKPT_PATH = "/home/main/soilspec/named_ckpts/ossl_uncompressed/checkpoints/epoch=1159-step=10440.ckpt"
 
-    backbone_ckpt = torch.load(CKPT_PATH)
+    # backbone_ckpt = torch.load(CKPT_PATH)
 
-    backbone_weights = {
-        k: v for k, v in backbone_ckpt["state_dict"].items() if k.startswith("seq.")
-    }
-    print(backbone_weights)
+    # backbone_weights = {
+    #     k: v for k, v in backbone_ckpt["state_dict"].items() if k.startswith("seq.")
+    # }
+    # print(backbone_weights)
 
-    with torch.no_grad():
-        model.backbone.weights = backbone_weights
+    # with torch.no_grad():
+    #     model.backbone.weights = backbone_weights
 
-    for param in model.backbone.parameters():
-        param.requires_grad = False
+    # for param in model.backbone.parameters():
+    #     param.requires_grad = False
     # exit()
 
     # X_train = pca.transform(X_train)
@@ -427,7 +427,7 @@ if __name__ == "__main__":
             # StochasticWeightAveraging(swa_lrs=1e-2),
         ],
         check_val_every_n_epoch=20,
-        max_epochs=2000,
+        max_epochs=1000,
     )
 
     train_loader = data_utils.DataLoader(
