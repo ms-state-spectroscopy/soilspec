@@ -5,14 +5,16 @@ from cubist import Cubist
 from tqdm import trange
 from analyzers.rf import RandomForestAnalyzer
 from analyzers.cubist import CubistAnalyzer
+from analyzers.two_part_mlp import LitMlp
 import analyzers.utils as utils
 import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 import matplotlib
 
-matplotlib.use("Agg")
+matplotlib.use("TkAgg")
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 import mississippi_db
 import mississippi_db.loader
 import numpy as np
@@ -31,62 +33,28 @@ import torch.utils.data as data_utils
 import contextlib
 from PIL import Image
 
-
-"""
-General steps:
-
-1. Load data with physical indicators from OSSL
-2. Train an MLP on the data
-3. Test on the MS dataset
-"""
-
-# PARAMS
-BATCH_SIZE = 32
 SEED = 64
-
-# 0. Set the seed.
 utils.seedEverything(SEED)
-torch.set_float32_matmul_precision("medium")
 
-mississippi_labels = ["wilting_point"]
-ossl_labels = [
-    # "cf_usda.c236_w.pct",
-    # "oc_usda.c729_w.pct",
-    "clay.tot_usda.a334_w.pct",
-    "sand.tot_usda.c60_w.pct",
-    "silt.tot_usda.c62_w.pct",
-    # "bd_usda.a4_g.cm3",
-    "wr.1500kPa_usda.a417_w.pct",
-    # "awc.33.1500kPa_usda.c80_w.frac",
-]
+light_purple = "#C5A9C7"
+dark_purple = "#543856"
+purple = "#B38CB4"
+gambodge_500 = "#EC9A29"
+green = "#79A48A"
+dark_green = "#065143"
+light_green = "#AAC5B5"
 
-(_, _, _, _, pca) = ossl_db.loader.load(
-    labels=ossl_labels,
-    normalize_Y=True,
-    from_pkl=True,
-    include_unlabeled=False,
-    take_grad=False,
-    n_components=120,
-)
-
-(
-    (X_train, Y_train),
-    (X_val, Y_val),
-    original_label_max,
-    original_label_min,
-) = mississippi_db.loader.load(
-    labels=mississippi_labels,
-    normalize_Y=True,
-    from_pkl=False,
-    train_split=100 / 225,
-    take_grad=False,
-    n_components=None,
-    include_unlabeled=False,
-)
-
-
-# X_train = pca.transform(X_train)
-# X_val = pca.transform(X_val)
+sky_200 = "#bae6fd"
+sky_700 = "#0369a1"
+violet_500 = "#B38CB4"
+blue_500 = "#3b82f6"
+yellow_500 = "#eab308"
+teal_200 = "#99f6e4"
+teal_800 = "#115e59"
+cambridge_200 = "#C2D6CA"
+cambridge_800 = "#42614E"
+pink_700 = "#be185d"
+pink_600 = "#db2777"
 
 
 class LitModel(L.LightningModule):
@@ -451,135 +419,182 @@ class LitModel(L.LightningModule):
         return y_pred
 
 
-if __name__ == "__main__":
-    pca = PCA(n_components=80)
+def hex_to_RGB(hex_str):
+    """#FFFFFF -> [255,255,255]"""
+    # Pass 16 to the integer function for change of base
+    return [int(hex_str[i : i + 2], 16) for i in range(1, 6, 2)]
 
-    clay_model = LitModel(
-        input_dim=1051,
-        hidden_size=200,
-        output_dim=len(mississippi_labels),
-        p=0.5,
-        original_label_minmax=(original_label_min, original_label_max),
-        pca=None,
-        add_contrastive=False,
-    )
 
-    checkpoint = torch.load(
-        "/home/main/soilspec/named_ckpts/ossl_clay/checkpoints/epoch=1959-step=168560.ckpt"
-    )
-    clay_weights = {
-        k.replace("seq", "head"): v for k, v in checkpoint["state_dict"].items()
-    }
-    clay_model.weights = clay_weights
+def get_color_gradient(c1, c2, n):
+    """
+    Given two hex colors, returns a color gradient
+    with n colors.
+    """
+    assert n > 1
+    c1_rgb = np.array(hex_to_RGB(c1)) / 255
+    c2_rgb = np.array(hex_to_RGB(c2)) / 255
+    mix_pcts = [x / (n - 1) for x in range(n)]
+    rgb_colors = [((1 - mix) * c1_rgb + (mix * c2_rgb)) for mix in mix_pcts]
+    return [
+        "#" + "".join([format(int(round(val * 255)), "02x") for val in item])
+        for item in rgb_colors
+    ]
 
-    clay_model.eval()
-    clay_pred = clay_model.forward(torch.from_numpy(X_train).type(torch.float32))
-    print(clay_pred)
 
-    bd_model = LitModel(
-        input_dim=1051,
-        hidden_size=200,
-        output_dim=len(mississippi_labels),
-        p=0.5,
-        original_label_minmax=(original_label_min, original_label_max),
-        pca=None,
-        add_contrastive=False,
-    )
+ossl_labels = [
+    # "cf_usda.c236_w.pct",
+    # "oc_usda.c729_w.pct",
+    "clay.tot_usda.a334_w.pct",
+    "sand.tot_usda.c60_w.pct",
+    "silt.tot_usda.c62_w.pct",
+    # "bd_usda.a4_g.cm3",
+    "wr.1500kPa_usda.a417_w.pct",
+    # "awc.33.1500kPa_usda.c80_w.frac",
+]
 
-    checkpoint = torch.load(
-        "/home/main/soilspec/named_ckpts/ossl_bd/checkpoints/epoch=1999-step=10000.ckpt"
-    )
-    bd_weights = {
-        k.replace("seq", "head"): v for k, v in checkpoint["state_dict"].items()
-    }
-    bd_model.weights = bd_weights
+# (
+#     (X_train, Y_train),
+#     (X_test, Y_test),
+#     original_label_mean,
+#     original_label_std,
+# ) = ossl_db.loader.load(
+#     labels=ossl_labels,
+#     normalize_Y=True,
+#     from_pkl=True,
+#     include_unlabeled=False,
+#     take_grad=False,
+#     n_components=60,
+# )
 
-    bd_model.eval()
-    bd_pred = bd_model.forward(torch.from_numpy(X_train).type(torch.float32))
-    print(bd_pred)
+mississippi_labels = ["wilting_point"]
 
-    bd_pred_test = bd_model.forward(torch.from_numpy(X_val).type(torch.float32))
-    print(bd_pred_test)
-    clay_pred_test = clay_model.forward(torch.from_numpy(X_val).type(torch.float32))
-    print(clay_pred_test)
+(
+    (X_train, Y_train),
+    (X_val, Y_val),
+    original_label_max,
+    original_label_min,
+) = mississippi_db.loader.load(
+    labels=mississippi_labels,
+    normalize_Y=True,
+    from_pkl=False,
+    train_split=100 / 225,
+    take_grad=False,
+    n_components=None,
+    include_unlabeled=False,
+)
 
-    print(X_train.shape)
+pca = PCA(n_components=80)
+pca.fit(X_train)
 
-    X_train = np.hstack(
-        (X_train, bd_pred.numpy(force=True), clay_pred.numpy(force=True))
-    )
+X_train_pca = pca.transform(X_train)
+X_val_pca = pca.transform(X_val)
 
-    X_val = np.hstack(
-        (X_val, bd_pred_test.numpy(force=True), clay_pred_test.numpy(force=True))
-    )
-    print(X_train.shape)
+# Remove a single pesky outlier
+X_val_pca = X_val_pca[X_val_pca[:, 0] < 7]
 
-    pca.fit(X_train)
+fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+ax1: Axes
+fig.set_dpi(150.0)
+fig.set_size_inches(12.0, 4.0)
 
-    denorm_scale = original_label_max - original_label_min
+ax1.grid(True)
 
-    # Uncomment these blocks to test Cubist and RF baselines
-    # analyzer = CubistAnalyzer()
-    # analyzer.train(X_train, Y_train)
-    # r2, rmse = analyzer.test(X_val, Y_val)
-    # print(r2, rmse * denorm_scale)
 
-    # analyzer = RandomForestAnalyzer()
-    # analyzer.train(X_train, Y_train)
-    # r2, rmse = analyzer.test(X_val, Y_val)
-    # print(r2, rmse * denorm_scale)
+ax1.scatter(X_train_pca[:, 0], X_train_pca[:, 1], c=violet_500, label="Train")
+ax1.scatter(X_val_pca[:, 0], X_val_pca[:, 1], c=gambodge_500, label="Test")
+ax1.set_xlabel("Principal Component 1")
+ax1.set_ylabel("Principal Component 2")
+ax1.legend()
 
-    # X_train = pca.transform(X_train)
-    # X_val = pca.transform(X_val)
+denorm_scale = original_label_max - original_label_min
+Y_train_denorm = Y_train * denorm_scale + original_label_min
 
-    # analyzer = CubistAnalyzer()
-    # analyzer.train(X_train, Y_train)
-    # r2, rmse = analyzer.test(X_val, Y_val)
-    # print(r2, rmse * denorm_scale)
+sort_idx = np.argsort(Y_train_denorm.flatten())
+print(sort_idx)
+X_train_sorted = X_train[sort_idx]
+Y_train_sorted = Y_train_denorm[sort_idx]
 
-    # analyzer = RandomForestAnalyzer()
-    # analyzer.train(X_train, Y_train)
-    # r2, rmse = analyzer.test(X_val, Y_val)
-    # print(r2, rmse * denorm_scale)
 
-    model = LitModel(
-        input_dim=1053,
-        hidden_size=200,
-        output_dim=len(mississippi_labels),
-        p=0.5,
-        original_label_minmax=(original_label_min, original_label_max),
-        pca=None,
-        add_contrastive=False,
-        augment=False,
-        fcn=False,  # Use an FCN or a CNN
-    )
+bottom_ten_X = X_train_sorted[:10]
+bottom_ten_Y = Y_train_sorted[:10]
 
-    checkpoint_callback = ModelCheckpoint(monitor="rmse/val", mode="min", verbose=True)
+top_ten_X = X_train_sorted[-10:]
+top_ten_Y = Y_train_sorted[-10:]
+print(Y_train_sorted)
 
-    trainer = L.Trainer(
-        callbacks=[
-            EarlyStopping(monitor="rmse/val", mode="min", patience=100, min_delta=0.01),
-            checkpoint_callback,
-        ],
-        check_val_every_n_epoch=20,
-        max_epochs=1000,
-    )
 
-    train_loader = data_utils.DataLoader(
-        utils.CustomDataset(X_train, Y_train),
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        num_workers=4,
-    )
+wavelengths = np.linspace(400, 2500, X_train.shape[-1])
+# for spectrum in top_ten_X[:]:
 
-    val_loader = data_utils.DataLoader(
-        utils.CustomDataset(X_val, Y_val),
-        batch_size=len(X_val),
-        num_workers=4,
-    )
+#     ax2.plot(wavelengths, spectrum, c="red")
 
-    # Sanity check our data
-    print(f"Training with {len(Y_train)} train labels, {len(Y_val)} val labels")
+# for spectrum in bottom_ten_X[:]:
 
-    trainer.fit(model, train_loader, val_loader)
-    trainer.test(model, val_loader)
+#     ax2.plot(wavelengths, spectrum, c="blue")
+
+
+colors = get_color_gradient(cambridge_200, teal_800, len(Y_train_sorted))
+
+ax2.set_xlabel("Wavelength (nm)")
+ax2.set_ylabel("Reflectance (%)")
+
+for i in range(0, len(Y_train_sorted), 4):
+    spectrum = X_train_sorted[i]
+    ax2.plot(wavelengths, spectrum, color=colors[i])
+
+
+final_model = LitModel.load_from_checkpoint(
+    "/home/main/soilspec/named_ckpts/trial_9_cnn_cbd/checkpoints/epoch=879-step=3520.ckpt",
+    input_dim=1053,
+    hidden_size=200,
+    output_dim=len(mississippi_labels),
+    p=0.5,
+    original_label_minmax=(original_label_min, original_label_max),
+    pca=None,
+    add_contrastive=False,
+    augment=False,
+    fcn=False,  # Use an FCN or a CNN
+)
+
+Y_pred = final_model.forward(torch.from_numpy(X_val).type(torch.float32).cuda())
+
+print(Y_pred)
+
+cubist = CubistAnalyzer()
+cubist.train(X_train, Y_train)
+Y_pred_cubist = cubist.predict(X_val)
+
+print(Y_pred_cubist)
+
+denorm_scale = original_label_max - original_label_min
+Y_val_denorm = Y_val * denorm_scale + original_label_min
+Y_pred_denorm = Y_pred * denorm_scale + original_label_min
+Y_cubist_denorm = Y_pred_cubist * denorm_scale + original_label_min
+
+eps = 1.1
+ax3.grid(True)
+ax3.scatter(
+    Y_val_denorm,
+    Y_pred_denorm.numpy(force=True),
+    color=teal_800,
+    label="CNN (best model)",
+)
+ax3.plot(
+    [Y_val_denorm.min() * eps, Y_val_denorm.max() * eps],
+    [Y_val_denorm.min() * eps, Y_val_denorm.max() * eps],
+    c="#79A48A",
+    linewidth=3,
+)
+ax3.scatter(Y_val_denorm, Y_cubist_denorm, color=pink_600, label="Cubist (baseline)")
+
+ax3.legend()
+
+# ax3.set_ylim([0.1, 0.55])
+ax3.set_xlabel("True value (% water)")
+ax3.set_ylabel("Predicted value (% water)")
+
+
+# ax1.set_xlim(-6, 6)
+# ax1.set_ylim(-1.2, 1.5)
+# ax1.set_aspect("equal")
+plt.show()

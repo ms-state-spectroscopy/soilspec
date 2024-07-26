@@ -84,6 +84,9 @@ def load(
         print("Joining visnir and lab dfs.")
         dataset = visnir_df.join(lab_df, rsuffix="_lab")
 
+        print(dataset.shape)
+        exit()
+
         dataset.columns.to_series().to_csv("ossl_db/colum_names.csv")
 
         # Drop NaNs for labels
