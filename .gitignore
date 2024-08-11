@@ -17,3 +17,6 @@ events.out*
 *.xlsx
 version_1/
 named_ckpts/
+venv
+mississippi_db/*.csv
+

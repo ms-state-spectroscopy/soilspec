@@ -180,7 +180,7 @@ class LitPlainMlp(L.LightningModule):
         ax.set_ylim(y_np.min() * eps, y_np.max() * eps)
         ax.set_aspect("equal")
 
-        plt.savefig("test_plot.png")
+        plt.savefig("images/test_plot.png")
         plt.show()
 
         self.log(f"test_r2", r2)
@@ -245,7 +245,7 @@ class LitPlainMlp(L.LightningModule):
         ax.set_aspect("equal")
 
         if self.current_epoch > 0:
-            plt.gcf().savefig(f"version_{self._version}/{self.current_epoch}.png")
+            plt.gcf().savefig(f"images/version_{self._version}/{self.current_epoch}.png")
 
         tensorboard = self.logger.experiment
         tensorboard.add_figure(
@@ -258,7 +258,7 @@ class LitPlainMlp(L.LightningModule):
         return loss
 
     def on_train_start(self):
-        path = f"version_{self._version}/"
+        path = f"images/version_{self._version}/"
         try:
             print(f"Creating {path}")
             os.mkdir(path)
@@ -271,13 +271,13 @@ class LitPlainMlp(L.LightningModule):
 
     def on_test_start(self):
 
-        files: list = os.listdir(f"version_{self._version}/")
+        files: list = os.listdir(f"images/version_{self._version}/")
         print(f"Saving gif with {len(files)} frames!")
         images = []
 
         # filepaths
-        fp_in = f"version_{self._version}/*.png"
-        fp_out = f"version_{self._version}/full.gif"
+        fp_in = f"images/version_{self._version}/*.png"
+        fp_out = f"images/version_{self._version}/full.gif"
 
         with contextlib.ExitStack() as stack:
 
@@ -289,7 +289,7 @@ class LitPlainMlp(L.LightningModule):
                 try:
                     imgs.append(
                         stack.enter_context(
-                            Image.open(f"version_{self._version}/{i}.png")
+                            Image.open(f"images/version_{self._version}/{i}.png")
                         )
                     )
                     i += 1
@@ -395,10 +395,10 @@ class MlpAnalyzer(Analyzer):
         )
 
         train_loader = data_utils.DataLoader(
-            train_set, batch_size=self.batch_size, shuffle=True, num_workers=19
+            train_set, batch_size=self.batch_size, shuffle=True, num_workers=8, persistent_workers=True
         )
         val_loader = data_utils.DataLoader(
-            val_set, batch_size=valid_set_size, num_workers=19
+            val_set, batch_size=valid_set_size, num_workers=8, persistent_workers=True
         )
 
         self.trainer.fit(self.lit_model, train_loader, val_loader)
@@ -407,7 +407,7 @@ class MlpAnalyzer(Analyzer):
         dataset = CustomDataset(X_test, Y_test)
 
         test_dataloader = data_utils.DataLoader(
-            dataset, batch_size=len(X_test), num_workers=19
+            dataset, batch_size=len(X_test), num_workers=8, persistent_workers=True
         )
 
         self.trainer.test(self.lit_model, test_dataloader)
