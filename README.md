@@ -58,7 +58,17 @@ This project contains code for Soil spectroscopy project. Follow the instruction
 
    This command installs all the libraries required for the project.
 
-5. **Run the Code**
+5. **Download the Databse**
+
+   Now download the [databse](https://www.dropbox.com/scl/fi/a61hy91trgckjbu3yui0j/mississippi_db.csv?rlkey=mbpuhn24dmq1ievf2lgod0456&e=2&st=6katxiow&dl=0) and save it to `mississippi_db` folder as `mississippi_db.csv`.
+   
+   You can copy and paste the following code in the main working directory to download it through terminal.
+
+   ```bash
+   curl -L -o ./mississippi_db/mississippi_db.csv 'https://www.dropbox.com/scl/fi/a61hy91trgckjbu3yui0j/mississippi_db.csv?rlkey=mbpuhn24dmq1ievf2lgod0456&e=2&st=6katxiow&dl=0'
+   ```
+
+6. **Run the Code**
 
    Once all dependencies are installed, run the main script to execute the machine learning code:
 
@@ -66,7 +76,7 @@ This project contains code for Soil spectroscopy project. Follow the instruction
    python main.py
    ```
 
-6. **Deactivate the Virtual Environment**
+7. **Deactivate the Virtual Environment**
 
    After you're done, deactivate the virtual environment to exit the isolated environment:
 
