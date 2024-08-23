@@ -1,5 +1,90 @@
 # Soil spectroscopy toolbox
 
+
+This project contains code for Soil spectroscopy project. Follow the instructions below to set up the environment and run the code.
+
+## Prerequisites
+
+- **Python**: Ensure you have Python 3.6 or higher installed. You can check your Python version by running:
+  ```bash
+  python --version
+  ```
+
+## Setup Instructions
+
+1. **Clone the Repository**
+
+   First, clone the repository to your local machine and navigate into the project directory:
+
+   ```bash
+   git clone <repository-url>
+   cd <repository-name>
+   ```
+
+   Replace `<repository-url>` with the actual URL of your repository and `<repository-name>` with the directory name.
+
+2. **Create a Virtual Environment**
+
+   To keep dependencies isolated, create a virtual environment by running:
+
+   ```bash
+   python -m venv venv
+   ```
+
+   This command will create a directory named `venv` in your project folder.
+
+3. **Activate the Virtual Environment**
+
+   Activate the virtual environment using the appropriate command for your operating system:
+
+   - **Windows**:
+     ```bash
+     venv\Scripts\activate
+     ```
+
+   - **macOS and Linux**:
+     ```bash
+     source venv/bin/activate
+     ```
+
+   You can then check if the virtual environment (venv) is activated properly by using the command which python. The output should contain the path to the Python executable inside your project's venv directory.
+
+4. **Install Dependencies**
+
+   Install the necessary dependencies from the `requirements.txt` file:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+   This command installs all the libraries required for the project.
+
+5. **Run the Code**
+
+   Once all dependencies are installed, run the main script to execute the machine learning code:
+
+   ```bash
+   python main.py
+   ```
+
+6. **Deactivate the Virtual Environment**
+
+   After you're done, deactivate the virtual environment to exit the isolated environment:
+
+   ```bash
+   deactivate
+   ```
+
+## Notes
+
+- To add new dependencies, update the `requirements.txt` file with:
+  ```bash
+  pip freeze > requirements.txt
+  ```
+- Ensure your virtual environment is active when installing new packages.
+
+
+
 ## General instructions
 
 1. Load the data. This is any set of numerical features (X) and labels (Y), structured as pandas DataFrames and divided into a training and test set.
@@ -86,3 +171,4 @@ First ensure you've met the hardware and system requirements outlined in the [in
 export CUDNN_PATH=$(dirname $(python -c "import nvidia.cudnn;print(nvidia.cudnn.__file__)"))
 export LD_LIBRARY_PATH=${CUDNN_PATH}/lib
 ```
+
