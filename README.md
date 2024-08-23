@@ -58,9 +58,9 @@ This project contains code for Soil spectroscopy project. Follow the instruction
 
    This command installs all the libraries required for the project.
 
-5. **Download the Databse**
+5. **Download the Database**
 
-   Now download the [databse](https://www.dropbox.com/scl/fi/a61hy91trgckjbu3yui0j/mississippi_db.csv?rlkey=mbpuhn24dmq1ievf2lgod0456&e=2&st=6katxiow&dl=0) and save it to `mississippi_db` folder as `mississippi_db.csv`.
+   Now download the [database](https://www.dropbox.com/scl/fi/a61hy91trgckjbu3yui0j/mississippi_db.csv?rlkey=mbpuhn24dmq1ievf2lgod0456&e=2&st=6katxiow&dl=0) and save it to `mississippi_db` folder as `mississippi_db.csv`.
    
    You can copy and paste the following code in the main working directory to download it through terminal.
 
