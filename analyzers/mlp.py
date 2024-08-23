@@ -328,6 +328,7 @@ class MlpAnalyzer(Analyzer):
         checkpoint_path=None,
         max_train_epochs: int = 1000,
         n_augmentations: int = 10,
+        num_workers = None
     ) -> None:
         super().__init__(verbose=verbose)
 
@@ -342,6 +343,11 @@ class MlpAnalyzer(Analyzer):
             n_augmentations=n_augmentations,
             output_dim=output_size,
         )
+
+        # Automatically set num_workers if not provided
+        self.num_workers = num_workers or os.cpu_count()
+        print("Number of worker (cpu cores): " , self.num_workers)
+
 
         if checkpoint_path is not None:
             print(
@@ -366,8 +372,12 @@ class MlpAnalyzer(Analyzer):
             #     input_dim=input_size,
             # )
 
+        accelerator = "gpu" if torch.cuda.is_available() else "cpu"
+
+        print("Accelerator being used: ", accelerator)
+
         self.trainer = L.Trainer(
-            accelerator="gpu",
+            accelerator=accelerator,
             # limit_val_batches=100,
             max_epochs=max_train_epochs,
             callbacks=[
@@ -395,10 +405,10 @@ class MlpAnalyzer(Analyzer):
         )
 
         train_loader = data_utils.DataLoader(
-            train_set, batch_size=self.batch_size, shuffle=True, num_workers=8, persistent_workers=True
+            train_set, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers, persistent_workers=True
         )
         val_loader = data_utils.DataLoader(
-            val_set, batch_size=valid_set_size, num_workers=8, persistent_workers=True
+            val_set, batch_size=valid_set_size, num_workers=self.num_workers, persistent_workers=True
         )
 
         self.trainer.fit(self.lit_model, train_loader, val_loader)
@@ -407,7 +417,7 @@ class MlpAnalyzer(Analyzer):
         dataset = CustomDataset(X_test, Y_test)
 
         test_dataloader = data_utils.DataLoader(
-            dataset, batch_size=len(X_test), num_workers=8, persistent_workers=True
+            dataset, batch_size=len(X_test), num_workers=self.num_workers, persistent_workers=True
         )
 
         self.trainer.test(self.lit_model, test_dataloader)
