@@ -17,11 +17,10 @@ This project contains code for Soil spectroscopy project. Follow the instruction
    First, clone the repository to your local machine and navigate into the project directory:
 
    ```bash
-   git clone <repository-url>
-   cd <repository-name>
+   git clone https://github.com/ms-state-spectroscopy/soilspec
+   cd soilspec
    ```
 
-   Replace `<repository-url>` with the actual URL of your repository and `<repository-name>` with the directory name.
 
 2. **Create a Virtual Environment**
 
