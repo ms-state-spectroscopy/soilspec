@@ -1,3 +1,14 @@
 {
-    "python.analysis.autoImportCompletions": true
+  "python.analysis.autoImportCompletions": true,
+  "python.languageServer": "Pylance",
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingModuleSource": "none",
+    "reportShadowedImports": "none"
+  },
+  "python.analysis.extraPaths": [
+    "",
+    "/Users/peenut/.vscode/extensions/joedevivo.vscode-circuitpython-0.2.0-darwin-arm64/stubs",
+    "/Users/peenut/Library/Application Support/Code/User/globalStorage/joedevivo.vscode-circuitpython/bundle/20240822/adafruit-circuitpython-bundle-py-20240822/lib"
+  ],
+  "circuitpython.board.version": null
 }

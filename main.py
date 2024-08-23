@@ -14,7 +14,8 @@ import argparse
 
 import pandas as pd
 from sklearn.decomposition import PCA
-from analyzers.cubist import CubistAnalyzer
+#from analyzers.cubist import CubistAnalyzer
+
 from analyzers.rf import RandomForestAnalyzer
 import mississippi_db
 import mississippi_db.loader
